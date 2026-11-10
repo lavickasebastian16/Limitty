@@ -27,7 +27,8 @@ concurrency:
 
 jobs:
   ios:
-    runs-on: macos-15
+    # Intel Mac: GitHub has had long queues for Apple Silicon (macos-15) runners.
+    runs-on: macos-15-intel
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
