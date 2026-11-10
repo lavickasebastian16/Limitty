@@ -52,8 +52,8 @@ function render() {
       <div class="side">${side(a)}</div>
       <div class="about">${esc(a.about)}</div>
       ${a.error ? `<div class="err">${esc(a.error)}</div>` : ''}
-      ${a.note ? `<div class="hint">${esc(a.note)}</div>` : ''}
-      ${a.loginCommand ? `<div class="hint">No terminal app found. Open one and run <code>${esc(a.loginCommand)}</code> to sign in.</div>` : ''}
+      ${a.note ? `<div class="hint">${esc(a.note)}${a.url ? ' <a href="#" data-reopen="' + a.id + '">Open the page again</a>' : ''}</div>` : ''}
+      ${a.job === 'signin' && a.codeBox ? `<form class="code-row" data-code="${a.id}"><input placeholder="Paste the code from the page (if it shows one)" autocomplete="off"><button class="small">Continue</button></form>` : ''}
     </div>`).join('');
 
   const picked = state.agents.filter((a) => a.chosen);
@@ -78,8 +78,19 @@ document.addEventListener('change', async (e) => {
   render();
 });
 
+document.addEventListener('submit', async (e) => {
+  const f = e.target.closest('form[data-code]');
+  if (!f) return;
+  e.preventDefault();
+  const input = f.querySelector('input');
+  if (!input.value.trim()) return;
+  f.querySelector('button').disabled = true;
+  state = await agents.code(f.dataset.code, input.value);
+  render();
+});
+
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button, a');
+  const t = e.target.closest('button:not(.code-row button), a');
   if (!t) return;
   if (t.id === 'openGitHub') {
     e.preventDefault();
@@ -90,6 +101,9 @@ document.addEventListener('click', async (e) => {
   } else if (t.dataset.login) {
     state = await agents.login(t.dataset.login);
     render();
+  } else if (t.dataset.reopen) {
+    e.preventDefault();
+    agents.reopen(t.dataset.reopen);
   } else if (t.dataset.skip) {
     state = await agents.skip(t.dataset.skip);
     render();
@@ -102,7 +116,17 @@ $('install').addEventListener('click', () => {
 });
 $('done').addEventListener('click', () => agents.done());
 
-agents.onUpdate((s) => { state = s; render(); });
+agents.onUpdate((s) => {
+  // Keep a code you're typing.
+  const typing = document.activeElement?.closest('.code-row');
+  const kept = typing && { id: typing.dataset.code, value: typing.querySelector('input').value };
+  state = s;
+  render();
+  if (kept) {
+    const input = document.querySelector(`.code-row[data-code="${kept.id}"] input`);
+    if (input) { input.value = kept.value; input.focus(); }
+  }
+});
 agents.onLog((line) => {
   const log = $('log');
   log.textContent = (log.textContent + line + '\n').split('\n').slice(-300).join('\n');
@@ -110,5 +134,8 @@ agents.onLog((line) => {
 });
 
 agents.state().then((s) => { state = s; render(); });
-// Notice sign-ins finished in the terminal.
-setInterval(() => { if (!state.busy) agents.state().then((s) => { state = s; render(); }); }, 4000);
+// Keep install and sign-in status fresh.
+setInterval(() => {
+  if (state.busy || document.activeElement?.closest('.code-row')) return;
+  agents.state().then((s) => { state = s; render(); });
+}, 4000);

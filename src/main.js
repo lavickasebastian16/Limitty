@@ -182,8 +182,8 @@ async function connectAgents() {
 // ───── Agents window: choose, install and sign in ─────
 
 const PROVIDER_OF = { claude: 'claude', codex: 'codex', agy: 'antigravity' };
-const agentJobs = {}; // id → { job: 'queued'|'installing'|'signin', error, loginCommand, note }
-const signIns = {}; // id → { skip } while waiting for you to sign in
+const agentJobs = {}; // id → { job: 'queued'|'installing'|'signin', error, note, url, codeBox }
+const signIns = {}; // id → { sendCode, cancel } while you sign in
 let installing = false;
 // The one-click setup: each step's state ('todo'|'running'|'done'|'skipped'|'failed') and a note.
 const SETUP_STEPS = [
@@ -213,7 +213,7 @@ function openAgents() {
 function agentsState() {
   const list = tools.status().map((a) => {
     const j = agentJobs[a.id] || {};
-    return { ...a, job: j.job || null, error: j.error || null, loginCommand: j.loginCommand || null, note: j.note || null };
+    return { ...a, job: j.job || null, error: j.error || null, note: j.note || null, url: j.url || null, codeBox: !!j.codeBox };
   });
   const cfg = agentConfig();
   return {
@@ -257,19 +257,28 @@ async function installOne(id) {
   return r.ok;
 }
 
-/** Opens the sign-in terminal and waits until you're done there (or press Skip). */
+/** Signs in through a new browser tab and waits until you're done there (or press Skip). */
 async function signInOne(id) {
-  agentJobs[id] = { job: 'signin', note: `A terminal window opened. ${tools.TOOLS[id].loginHint}` };
-  const s = tools.signIn(id);
-  signIns[id] = s;
+  const t = tools.TOOLS[id];
+  agentJobs[id] = { job: 'signin', note: `Opening the sign-in page in your browser… ${t.loginHint}`, url: null, codeBox: id === 'claude' };
   pushAgentsState();
+  const s = tools.browserLogin(id, {
+    onUrl: (url) => {
+      if (!agentJobs[id]?.url) shell.openExternal(url); // a new tab; later links are only offered
+      agentJobs[id] = { ...agentJobs[id], url, note: `A sign-in page opened in your browser. ${t.loginHint}` };
+      pushAgentsState();
+    },
+    onLine: agentLog,
+  });
+  signIns[id] = s;
   const r = await s.promise;
   delete signIns[id];
-  agentJobs[id] = r === 'no-terminal'
-    ? { loginCommand: s.command }
-    : r === 'closed' ? { error: 'Not signed in yet. Press Sign in to try again.' } : {};
+  agentJobs[id] = r === 'signed-in' ? {}
+    : r === 'cancelled' ? { error: 'Not signed in yet. Press Sign in when you’re ready.' }
+      : { error: `Sign-in didn’t finish. ${s.output().split('\n').slice(-2).join(' ')}`.trim() };
+  require('./company/workers').isInstalled.clearCache?.();
   pushAgentsState();
-  setTimeout(refresh, 3000); // show the new limits
+  setTimeout(refresh, 2000); // show the new limits
   return r;
 }
 
@@ -302,7 +311,7 @@ async function runSetup() {
     const needLogin = chosen.filter((id) => tools.find(id) && tools.TOOLS[id].signedIn() !== true);
     const skipped = [];
     for (const id of needLogin) {
-      setStep('signin', 'running', `Waiting for you to sign in to ${tools.TOOLS[id].name} in the terminal window…`);
+      setStep('signin', 'running', `Waiting for you to sign in to ${tools.TOOLS[id].name} in your browser…`);
       const r = await signInOne(id);
       if (r !== 'signed-in') skipped.push(tools.TOOLS[id].name);
     }
@@ -373,7 +382,9 @@ function setupAgentsIpc() {
     signInOne(id); // not awaited: the window follows along via updates
     return agentsState();
   });
-  ipcMain.handle('agents:skip', (_e, id) => { signIns[id]?.skip(); return agentsState(); });
+  ipcMain.handle('agents:skip', (_e, id) => { signIns[id]?.cancel(); return agentsState(); });
+  ipcMain.handle('agents:code', (_e, id, code) => { if (code) signIns[id]?.sendCode(code); return agentsState(); });
+  ipcMain.on('agents:reopen', (_e, id) => { const u = agentJobs[id]?.url; if (u) shell.openExternal(u); });
   ipcMain.on('agents:done', () => {
     if (!tools.hasChosen()) applyChoice(tools.chosen());
     agentsWin?.close();
@@ -468,8 +479,16 @@ function pushCompanyState() {
 function askInfo() {
   const st = companyState();
   const projects = ((st.owner ? st.projects : st.allProjects || st.projects) || []).map((p) => p.name);
-  const active = (st.tasks || []).filter((t) => ['queued', 'planning', 'running'].includes(t.status)).length;
-  return { projects, lastProject: projects.includes(config.lastProject) ? config.lastProject : projects[0] || null, active };
+  const tasks = st.tasks || [];
+  const active = tasks.filter((t) => ['queued', 'planning', 'running'].includes(t.status)).length;
+  // The latest task that finished in the last hour, so the widget can show it.
+  const recent = tasks.find((t) => ['done', 'failed'].includes(t.status) && Date.now() - t.updatedAt < 60 * 60_000);
+  return {
+    projects,
+    lastProject: projects.includes(config.lastProject) ? config.lastProject : projects[0] || null,
+    active,
+    last: recent ? { title: recent.title.split('\n')[0].slice(0, 60), status: recent.status } : null,
+  };
 }
 
 async function askSend(req) {
@@ -525,8 +544,37 @@ function setupCompanyIpc() {
     return require('path').basename(r.filePaths[0]);
   });
   ipcMain.handle('company:removeProject', (_e, name) => companyRequest({ kind: 'removeProject', name }));
+  // The team: CEO and roles (saved with Settings), and a quick check that each agent answers.
+  const teamState = () => {
+    const st = require('./settings').read();
+    return { ceo: st.ceo, strengths: st.strengths, defaultStrengths: st.defaultStrengths, agents: tools.status() };
+  };
+  ipcMain.handle('company:team', () => teamState());
+  ipcMain.handle('company:setTeam', (_e, patch = {}) => {
+    require('./settings').write({ ceo: patch.ceo, strengths: patch.strengths });
+    host?.applyConfig?.();
+    setTimeout(pushCompanyState, 100);
+    return teamState();
+  });
+  ipcMain.handle('company:testTeam', () => testTeam());
   // When another process runs the Company, watch its saved state.
   fs.watchFile(require('./company/host').COMPANY_FILE, { interval: 2000 }, () => { if (!host?.owner) pushCompanyState(); });
+}
+
+/** Asks each chosen agent for a one-word reply, so you see right away what works. */
+async function testTeam() {
+  const { run } = require('./company/workers');
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'limitty-test-'));
+  const opts = agentConfig()?.workers || {};
+  const results = await Promise.all(tools.chosen().map(async (id) => {
+    if (!tools.find(id)) return { id, ok: false, text: 'Not installed. Open Agents… to install it.' };
+    if (tools.TOOLS[id].signedIn() === false) return { id, ok: false, text: 'Not signed in. Open Agents… and press Sign in.' };
+    const r = await run(id, 'This is a connection test from Limitty. Reply with exactly: OK', { cwd: dir, mode: 'plan', timeoutMs: 120_000, opts }).promise;
+    return { id, ok: r.ok, text: r.text.slice(-800) };
+  }));
+  fs.rmSync(dir, { recursive: true, force: true });
+  require('./company/workers').isInstalled.clearCache?.();
+  return results;
 }
 
 function placeDefault() {

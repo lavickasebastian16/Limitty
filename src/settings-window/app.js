@@ -29,7 +29,7 @@ function render(all = true) {
   $('strengths').innerHTML = Object.keys(NAMES).map((id) => `
     <div class="strength">
       <div class="who"><span class="dot ${id}"></span>${NAMES[id]}</div>
-      <textarea data-id="${id}" rows="2"></textarea>
+      <textarea data-id="${id}" rows="2" aria-label="${NAMES[id]}'s role"></textarea>
     </div>`).join('');
   for (const ta of document.querySelectorAll('.strength textarea')) {
     ta.value = s.strengths[ta.dataset.id];

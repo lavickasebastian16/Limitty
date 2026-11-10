@@ -7,8 +7,7 @@
 //   Codex         the official release binary from github.com/openai/codex → ~/.local/bin/codex
 //   Antigravity   curl -fsSL https://antigravity.google/cli/install.sh | bash → ~/.local/bin/agy
 //
-// Nothing needs sudo. Signing in happens in a terminal window, the same way as
-// when you run the tool yourself.
+// Nothing needs sudo. Signing in opens the agent's own sign-in page in your browser.
 
 const fs = require('fs');
 const os = require('os');
@@ -41,11 +40,13 @@ const TOOLS = {
     provider: 'claude',
     about: 'Anthropic’s coding agent. Uses your Claude Pro or Max plan.',
     script: 'curl -fsSL https://claude.ai/install.sh | bash',
-    login: ['claude'], // the first run asks you to sign in
-    loginHint: 'Pick “Claude account with subscription” and sign in in the browser.',
+    login: ['auth', 'login'],
+    loginHint: 'Sign in with your Claude account. If the page then shows a code, paste it below.',
     signedIn: () => {
       const dir = process.env.CLAUDE_CONFIG_DIR || path.join(HOME, '.claude');
-      return fs.existsSync(path.join(dir, '.credentials.json')) ? true : null; // null: may be in a keyring
+      if (fs.existsSync(path.join(dir, '.credentials.json'))) return true;
+      // On Linux and Windows that file is the login; on macOS it may be in the Keychain instead.
+      return process.platform === 'darwin' ? null : false;
     },
   },
   codex: {
@@ -54,8 +55,8 @@ const TOOLS = {
     provider: 'codex',
     about: 'OpenAI’s coding agent. Uses your ChatGPT plan.',
     script: CODEX_SCRIPT,
-    login: ['codex', 'login'],
-    loginHint: 'Sign in with ChatGPT in the browser that opens.',
+    login: ['login'],
+    loginHint: 'Sign in with your ChatGPT account. The page tells you when you can close it.',
     signedIn: () => fs.existsSync(path.join(process.env.CODEX_HOME || path.join(HOME, '.codex'), 'auth.json')),
   },
   agy: {
@@ -64,8 +65,9 @@ const TOOLS = {
     provider: 'antigravity',
     about: 'Google’s coding agent (agy CLI). Uses your Google account’s Gemini quota.',
     script: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
-    login: ['agy'], // the first run asks you to sign in with Google
-    loginHint: 'Sign in with Google when agy asks.',
+    // agy has no login command: it asks you to sign in the first time it's used.
+    login: ['-p', 'Reply with just: OK'],
+    loginHint: 'Sign in with your Google account.',
     signedIn: () => null, // agy keeps its login where Limitty can't check it
   },
 };
@@ -209,102 +211,71 @@ function install(id, { onLine = () => {}, script } = {}) {
   return { promise, cancel: () => child.kill() };
 }
 
-// ───── signing in ─────
+// ───── signing in (in your browser) ─────
 
-/** A terminal command line that runs `cmd` (a shell string), or null if no terminal was found. */
-function terminalCommand(cmd, { platform = process.platform, has = hasCommand, env = process.env } = {}) {
-  if (platform === 'darwin') {
-    const script = `tell application "Terminal" to do script ${JSON.stringify(cmd)}`;
-    return ['osascript', ['-e', script, '-e', 'tell application "Terminal" to activate']];
-  }
-  if (platform === 'win32') return ['cmd.exe', ['/c', 'start', 'cmd.exe', '/k', cmd]];
-  const shell = ['bash', '-lc', cmd];
-  const candidates = [
-    ['xdg-terminal-exec', [...shell]], // Omarchy and other modern desktops
-    env.TERMINAL && [env.TERMINAL, ['-e', ...shell]],
-    ['ghostty', ['-e', ...shell]],
-    ['alacritty', ['-e', ...shell]],
-    ['kitty', [...shell]],
-    ['foot', [...shell]],
-    ['wezterm', ['start', '--', ...shell]],
-    ['gnome-terminal', ['--', ...shell]],
-    ['konsole', ['-e', ...shell]],
-    ['xfce4-terminal', ['-x', ...shell]],
-    ['x-terminal-emulator', ['-e', ...shell]],
-    ['xterm', ['-e', ...shell]],
-  ].filter(Boolean);
-  return candidates.find(([bin]) => has(bin)) || null;
-}
-
-function hasCommand(bin) {
-  if (path.isAbsolute(bin)) return isFile(bin);
-  return (process.env.PATH || '').split(path.delimiter).some((d) => d && isFile(path.join(d, bin)));
-}
-
-function quote(s) {
-  return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`;
-}
-
-/** Written when the sign-in terminal's command finishes, so setup knows to move on. */
-function loginDoneFile(id) {
-  return path.join(DIR, `signin-${id}.done`);
-}
-
-/** The shell line that signs in to an agent, run in a terminal. */
-function loginShellLine(id) {
-  const t = TOOLS[id];
-  const bin = find(id) || t.bin;
-  const run = [bin, ...t.login.slice(1)].map(quote).join(' ');
-  const done = quote(loginDoneFile(id));
-  return `export PATH="$HOME/.local/bin:$PATH"; echo ${quote(`Limitty: signing in to ${t.name}. ${t.loginHint}`)}; echo; ${run}; mkdir -p ${quote(DIR)}; touch ${done}; echo; read -r -t 15 -p "Done. This window closes in 15 seconds." _`;
-}
+const URL_RE = /https:\/\/[^\s"'<>]+/g;
 
 /**
- * Opens the sign-in terminal and waits until you've signed in (or closed it).
- * Returns { promise: Promise<'signed-in'|'closed'|'skipped'|'timeout'|'no-terminal'>, skip, command }.
+ * Signs in to an agent: runs its login in the background, hands each sign-in link to
+ * `onUrl` (Limitty opens it in a new browser tab), and passes a code you paste (Claude
+ * shows one on the page) back to it. Resolves to 'signed-in' | 'failed' | 'cancelled'.
+ * Returns { promise, sendCode, cancel, output() }.
  */
-function signIn(id, { openImpl = openLogin, timeoutMs = 15 * 60_000, pollMs = 1000 } = {}) {
+function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 * 60_000, spawnImpl = spawn } = {}) {
   const t = TOOLS[id];
-  const doneFile = loginDoneFile(id);
-  fs.mkdirSync(DIR, { recursive: true });
-  fs.rmSync(doneFile, { force: true });
-  const opened = openImpl(id);
+  const bin = find(id) || t.bin;
+  const lines = [];
+  const seen = new Set();
+  let child;
+  let cancelled = false;
   let finish;
   const promise = new Promise((resolve) => { finish = resolve; });
-  if (!opened.ok) { finish('no-terminal'); return { promise, skip: () => {}, command: opened.command }; }
-  const started = Date.now();
-  const timer = setInterval(() => {
-    if (t.signedIn() === true) done('signed-in');
-    else if (fs.existsSync(doneFile)) done(t.signedIn() === false ? 'closed' : 'signed-in');
-    else if (Date.now() - started > timeoutMs) done('timeout');
-  }, pollMs);
-  function done(r) {
-    clearInterval(timer);
-    fs.rmSync(doneFile, { force: true });
-    finish(r);
-  }
-  return { promise, skip: () => done('skipped'), command: opened.command };
-}
-
-/** Opens a terminal that signs in to the agent. Returns { ok, command } (command = what to run yourself if no terminal was found). */
-function openLogin(id, { spawnImpl = spawn } = {}) {
-  const line = loginShellLine(id);
-  const t = TOOLS[id];
-  const manual = [find(id) || t.bin, ...t.login.slice(1)].join(' ');
-  const term = terminalCommand(line);
-  if (!term) return { ok: false, command: manual };
+  const env = ensurePath({ ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' });
+  // Limitty opens the page itself, so stop the agents opening a second tab.
+  if (id !== 'agy') env.BROWSER = process.platform === 'win32' ? 'cmd /c rem' : 'true';
   try {
-    const child = spawnImpl(term[0], term[1], { detached: true, stdio: 'ignore', env: ensurePath({ ...process.env }) });
-    child.on?.('error', () => {});
-    child.unref?.();
-    return { ok: true, command: manual };
-  } catch {
-    return { ok: false, command: manual };
+    child = spawnImpl(bin, t.login, { cwd: HOME, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  } catch (e) {
+    finish('failed');
+    return { promise, sendCode: () => {}, cancel: () => {}, output: () => e.message };
   }
+  const feed = (buf) => {
+    for (const raw of String(buf).split(/\r?\n|\r/)) {
+      // eslint-disable-next-line no-control-regex
+      const line = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim();
+      if (!line) continue;
+      lines.push(line);
+      if (lines.length > 40) lines.shift();
+      onLine(line);
+      for (const url of line.match(URL_RE) || []) {
+        // Only sign-in pages, not e.g. a docs link; and each one once.
+        if (seen.has(url) || !/oauth|auth|login|accounts\.google|signin/i.test(url)) continue;
+        seen.add(url);
+        onUrl(url);
+      }
+    }
+  };
+  child.stdout?.on('data', feed);
+  child.stderr?.on('data', feed);
+  child.stdin?.on('error', () => {});
+  const timer = setTimeout(() => { cancelled = true; child.kill(); }, timeoutMs);
+  child.on('error', (e) => { clearTimeout(timer); lines.push(e.message); finish('failed'); });
+  child.on('close', (code) => {
+    clearTimeout(timer);
+    if (cancelled) return finish('cancelled');
+    const signed = t.signedIn();
+    finish(signed === true || (code === 0 && signed !== false) ? 'signed-in' : 'failed');
+  });
+  return {
+    promise,
+    sendCode: (code) => { try { child.stdin.write(`${String(code).trim()}\n`); } catch { /* gone */ } },
+    cancel: () => { cancelled = true; try { child.kill(); } catch { /* gone */ } },
+    output: () => lines.slice(-6).join('\n'),
+  };
 }
 
 module.exports = {
   TOOLS, IDS, LOCAL_BIN, CHOICE_FILE,
   ensurePath, find, status, chosen, hasChosen, isChosen, choose,
-  install, openLogin, signIn, loginDoneFile, terminalCommand, loginShellLine,
+  install, browserLogin,
 };

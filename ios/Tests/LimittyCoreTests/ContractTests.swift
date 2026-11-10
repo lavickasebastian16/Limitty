@@ -19,6 +19,7 @@ final class ContractTests: XCTestCase {
         XCTAssertEqual(task.source, "phone")
         XCTAssertEqual(task.plan?.steps.first?.why, "frontend/UI work")
         XCTAssertFalse(task.isActive)
+        XCTAssertEqual(task.result, "ok", "the last step's output is the result")
     }
 
     func testPhoneWritesWhatThePCReads() throws {

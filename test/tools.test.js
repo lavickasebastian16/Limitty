@@ -76,49 +76,40 @@ test('an installer that succeeds without leaving the command is a failure', asyn
   assert.match(r.error, /no `agy` command/);
 });
 
-test('picks a terminal for signing in: Omarchy first, then common ones', () => {
-  const only = (...names) => (b) => names.includes(b);
-  const [bin, args] = tools.terminalCommand('codex login', { platform: 'linux', has: only('xdg-terminal-exec', 'alacritty'), env: {} });
-  assert.strictEqual(bin, 'xdg-terminal-exec');
-  assert.deepStrictEqual(args, ['bash', '-lc', 'codex login']);
-  assert.deepStrictEqual(tools.terminalCommand('x', { platform: 'linux', has: only('kitty'), env: { TERMINAL: 'foot' } }), ['kitty', ['bash', '-lc', 'x']]);
-  assert.strictEqual(tools.terminalCommand('x', { platform: 'linux', has: only('foot'), env: { TERMINAL: 'foot' } })[1][0], '-e');
-  assert.strictEqual(tools.terminalCommand('x', { platform: 'linux', has: () => false, env: {} }), null);
-  assert.strictEqual(tools.terminalCommand('x', { platform: 'darwin' })[0], 'osascript');
-});
+test('browser sign-in: opens the sign-in link once, passes a pasted code back, and checks the result', async () => {
+  // A pretend `claude auth login`: prints a link, waits for a code, then saves the login.
+  const creds = path.join(HOME, '.claude', '.credentials.json');
+  fs.rmSync(creds, { force: true });
+  fakeAgent('claude');
+  fs.writeFileSync(path.join(BIN, 'claude'), `#!/bin/sh
+echo "Opening browser to sign in…"
+echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=abc"
+echo "See https://docs.example.com/help for help"
+printf "Paste code here if prompted > "
+read code
+[ "$code" = "good-code" ] || { echo "Invalid code."; exit 1; }
+mkdir -p "$HOME/.claude" && echo '{}' > "$HOME/.claude/.credentials.json"
+echo "Login successful."
+`, { mode: 0o755 });
+  const urls = [];
+  const s = tools.browserLogin('claude', { onUrl: (u) => urls.push(u) });
+  await new Promise((r) => setTimeout(r, 300));
+  assert.deepStrictEqual(urls, ['https://claude.com/cai/oauth/authorize?code=true&state=abc'], 'only the sign-in link');
+  assert.strictEqual(tools.TOOLS.claude.signedIn(), false, 'no login file yet means signed out (Linux)');
+  s.sendCode('  good-code \n');
+  assert.strictEqual(await s.promise, 'signed-in');
+  assert.strictEqual(tools.TOOLS.claude.signedIn(), true);
 
-test('the sign-in line runs the installed command and waits before closing', () => {
-  const line = tools.loginShellLine('codex');
-  assert.match(line, /\.local\/bin\/codex login;/);
-  assert.match(line, /touch .*signin-codex\.done/);
-  assert.match(line, /read -r -t 15/);
-});
+  // A wrong code: fails, with the agent's message.
+  fs.rmSync(creds);
+  const bad = tools.browserLogin('claude');
+  await new Promise((r) => setTimeout(r, 200));
+  bad.sendCode('nope');
+  assert.strictEqual(await bad.promise, 'failed');
+  assert.match(bad.output(), /Invalid code/);
 
-test('openLogin hands back the command when no terminal can be opened', () => {
-  const r = tools.openLogin('codex', { spawnImpl: () => { throw new Error('nope'); } });
-  assert.strictEqual(r.ok, false);
-  assert.match(r.command, /codex login$/);
-});
-
-test('signIn waits for the sign-in to finish, or Skip', async () => {
-  // Codex: signed in once auth.json appears.
-  fs.rmSync(path.join(HOME, '.codex', 'auth.json'), { force: true });
-  const a = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
-  setTimeout(() => fs.writeFileSync(path.join(HOME, '.codex', 'auth.json'), '{}'), 60);
-  assert.strictEqual(await a.promise, 'signed-in');
-  // agy can't be checked: done when its terminal command finishes.
-  const b = tools.signIn('agy', { openImpl: () => ({ ok: true, command: 'agy' }), pollMs: 20 });
-  setTimeout(() => fs.writeFileSync(tools.loginDoneFile('agy'), ''), 60);
-  assert.strictEqual(await b.promise, 'signed-in');
-  assert.strictEqual(fs.existsSync(tools.loginDoneFile('agy')), false);
-  // Closed without signing in.
-  fs.rmSync(path.join(HOME, '.codex', 'auth.json'));
-  const c = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
-  setTimeout(() => fs.writeFileSync(tools.loginDoneFile('codex'), ''), 60);
-  assert.strictEqual(await c.promise, 'closed');
-  const d = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
-  d.skip();
-  assert.strictEqual(await d.promise, 'skipped');
-  const e = tools.signIn('codex', { openImpl: () => ({ ok: false, command: 'codex login' }) });
-  assert.strictEqual(await e.promise, 'no-terminal');
+  // Skip.
+  const skipped = tools.browserLogin('claude');
+  skipped.cancel();
+  assert.strictEqual(await skipped.promise, 'cancelled');
 });

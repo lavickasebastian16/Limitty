@@ -51,14 +51,17 @@ function paintAsk(info) {
     + '<option value="__add">Add folder…</option>';
   if (askInfo.projects.includes(cur)) sel.value = cur;
   let line = document.querySelector('.tasks-line');
-  if (askInfo.active) {
+  const text = askInfo.active ? `▸ ${askInfo.active} task${askInfo.active > 1 ? 's' : ''} in progress · open`
+    : askInfo.last ? `${askInfo.last.status === 'done' ? '✓ Done' : '✗ Failed'}: ${askInfo.last.title} · see result`
+      : '';
+  if (text) {
     if (!line) {
       line = document.createElement('div');
       line.className = 'tasks-line';
       line.addEventListener('click', () => window.limitty.company());
       ask.after(line);
     }
-    line.textContent = `▸ ${askInfo.active} task${askInfo.active > 1 ? 's' : ''} in progress · open`;
+    line.textContent = text;
   } else if (line) line.remove();
 }
 

@@ -10,16 +10,39 @@
   <header>
     <div>
       <h1>Company</h1>
-      <p class="sub">You give the task. The CEO plans it and hands it to your agents.</p>
-    </div>
-    <div class="team-wrap">
-      <div id="team" class="team"></div>
-      <button type="button" id="chooseAgents" class="ghost small">Choose agents…</button>
+      <p class="sub">Type one task. The CEO splits it by everyone's role and hands out the work.</p>
     </div>
   </header>
 
+  <section class="team-panel">
+    <div class="team-head">
+      <label>CEO
+        <select id="ceo">
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex</option>
+          <option value="agy">Antigravity</option>
+          <option value="rules">No AI (simple rules)</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button type="button" id="testTeam" class="ghost small">Test team</button>
+      <button type="button" id="chooseAgents" class="ghost small">Agents…</button>
+    </div>
+    <div id="roles" class="roles"></div>
+    <datalist id="roleIdeas">
+      <option value="Lead: plans the work and reviews everything"></option>
+      <option value="Frontend: UI, CSS and components"></option>
+      <option value="Backend: APIs, databases and logic"></option>
+      <option value="Tests and QA: writes and runs tests, fixes failures"></option>
+      <option value="Refactoring and tricky bugs across many files"></option>
+      <option value="Docs, research and quick edits"></option>
+      <option value="Scripts, tooling and DevOps"></option>
+    </datalist>
+    <div id="testResults" class="test-results" hidden></div>
+  </section>
+
   <form id="new">
-    <textarea id="title" rows="3" placeholder="What should the team do? e.g. “Add a dark mode toggle to the settings page and write a test for it”" required></textarea>
+    <textarea id="title" rows="3" placeholder="The main task, e.g. “Add a dark mode toggle to the settings page and write a test for it”" required></textarea>
     <div class="row">
       <label>Project
         <select id="project"></select>

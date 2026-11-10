@@ -11,5 +11,8 @@ contextBridge.exposeInMainWorld('company', {
   addProject: () => ipcRenderer.invoke('company:addProject'),
   removeProject: (name) => ipcRenderer.invoke('company:removeProject', name),
   chooseAgents: () => ipcRenderer.send('window:agents'),
+  team: () => ipcRenderer.invoke('company:team'),
+  setTeam: (patch) => ipcRenderer.invoke('company:setTeam', patch),
+  testTeam: () => ipcRenderer.invoke('company:testTeam'),
   onUpdate: (cb) => ipcRenderer.on('company:update', (_e, s) => cb(s)),
 });

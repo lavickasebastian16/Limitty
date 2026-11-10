@@ -60,3 +60,22 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); bord
 #version { text-align: center; margin-top: 24px; }
 .ceo { font-size: 9.5px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 2px; }
 .why { color: var(--muted); font-size: 11.5px; margin: 2px 0 0 2px; font-style: italic; }
+
+.team-panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+.team-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.roles { display: grid; gap: 6px; margin-top: 10px; }
+.role { display: grid; grid-template-columns: 150px 1fr; gap: 10px; align-items: center; }
+.role .who { display: flex; flex-direction: column; font-weight: 600; font-size: 12.5px; }
+.role .who small { font-weight: 400; color: var(--muted); font-size: 11px; }
+.role .who small.off { color: var(--bad); }
+.role input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; width: 100%; box-sizing: border-box; }
+.role .ceo { margin-left: 4px; }
+.test-results { margin-top: 10px; display: grid; gap: 4px; font-size: 12px; }
+.test-results .ok { color: var(--ok); } .test-results .bad { color: var(--bad); }
+.test-results pre { margin: 2px 0 4px; max-height: 120px; }
+.result { margin: 10px 0 4px; border-left: 3px solid var(--ok); padding: 2px 0 2px 10px; }
+.result.failed { border-left-color: var(--bad); }
+.result b { font-size: 12px; }
+.result pre { margin-top: 4px; max-height: 320px; }
+details.how > summary { margin-top: 8px; }
+.role .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }

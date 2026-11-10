@@ -107,12 +107,12 @@ function command(worker, prompt, mode = 'work', opts = {}, model = null) {
   }
 }
 
-/** Is the worker installed, and did you choose it on the Agents screen? (Cached for 10 seconds.) */
+/** Can the worker take work: chosen on the Agents screen, installed, and not signed out? (Cached 10 s.) */
 const installedCache = new Map();
 function isInstalled(worker) {
   const hit = installedCache.get(worker);
   if (hit && Date.now() - hit.at < 10_000) return hit.ok;
-  const ok = !!tools.find(worker) && tools.isChosen(worker);
+  const ok = !!tools.find(worker) && tools.isChosen(worker) && tools.TOOLS[worker].signedIn() !== false;
   installedCache.set(worker, { ok, at: Date.now() });
   return ok;
 }
@@ -154,7 +154,8 @@ function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts
       if (cancelled) return done({ ok: false, text: 'Cancelled.', code });
       const parsed = cmd.parse(out);
       const ok = code === 0 && !parsed.failed;
-      done({ ok, text: tail(parsed.text || (ok ? 'Done.' : err) || `Exited with code ${code}`), code });
+      const text = tail(parsed.text || (ok ? 'Done.' : err) || `Exited with code ${code}`);
+      done({ ok, text: ok ? text : explain(worker, `${text}\n${err}`) || text, code });
     });
     if (cmd.stdin != null) {
       child.stdin.on('error', () => {});
@@ -166,6 +167,12 @@ function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts
     promise,
     cancel: () => { cancelled = true; kill(child); },
   };
+}
+
+/** Turns a sign-in failure into something you can act on (null if it's another problem). */
+function explain(worker, text) {
+  if (!/not logged in|log ?in required|please (run .*)?(log|sign) ?in|unauthori[sz]ed|\b401\b|invalid (api key|token|credentials)|authenticat(e|ion) (failed|required)|oauth token (has )?expired|sign in to continue/i.test(text)) return null;
+  return `${WORKERS[worker].name} isn't signed in. Open Agents (menu ⋯ → Agents) and press Sign in, then Run again.\n\n${text.trim().slice(-600)}`;
 }
 
 /** Stops the agent and everything it started (its whole process group). */
@@ -185,4 +192,4 @@ function tail(s) {
   return s.length > OUTPUT_LIMIT ? `…${s.slice(-OUTPUT_LIMIT)}` : s;
 }
 
-module.exports = { WORKERS, MODELS, modelsFor, modelArgs, command, run, isInstalled };
+module.exports = { WORKERS, MODELS, modelsFor, modelArgs, command, run, isInstalled, explain };

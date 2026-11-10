@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleVersion</key>
-	<string>103002</string>
+	<string>104000</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.03.002</string>
+	<string>1.04.000</string>
 	<key>CFBundleDisplayName</key>
 	<string>Limitty</string>
 	<!-- limitty://agents and limitty://tasks: opened from notifications and the widget. -->

@@ -131,6 +131,13 @@ struct TaskDetailView: View {
                     LabeledContent("Status") { StatusPill(task: task) }
                     if let error = task.error { Text(error).foregroundStyle(.red).font(.footnote) }
                 }
+                if let result = task.result {
+                    Section(task.status == "done" ? "Result" : "What went wrong") {
+                        Text(result)
+                            .font(.system(.footnote, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                }
                 if let plan = task.plan {
                     Section("CEO's plan (\(workerName(plan.by ?? "")))") {
                         Text(plan.summary).font(.footnote)
@@ -223,7 +230,7 @@ struct NewTaskView: View {
                         }
                     }
                 } footer: {
-                    Text("The CEO picks the worker and model for each step: a stronger model for hard work, a lighter one for simple work, and whoever has the most usage limit left. It can also do steps itself.")
+                    Text(teamText)
                 }
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }
@@ -242,6 +249,19 @@ struct NewTaskView: View {
             }
             .onAppear { if project.isEmpty { project = model.company?.projects.first?.name ?? "" } }
         }
+    }
+
+    /// "The CEO (Claude Code) splits it by role: Codex – Backend…"
+    private var teamText: String {
+        let c = model.company
+        let ceo = c?.ceo.map(workerName) ?? "Claude Code"
+        let roles = CompanyState.workerOrder.compactMap { id -> String? in
+            guard let w = c?.workers[id], w.available, let r = w.strengths else { return nil }
+            return "\(workerName(id)): \(r)"
+        }
+        return "The CEO (\(ceo)) splits the task by role and hands out the parts. "
+            + (roles.isEmpty ? "" : roles.joined(separator: " · ") + ". ")
+            + "Change roles in the Company window on your PC."
     }
 
     private func label(_ id: String, _ w: CompanyState.Worker?) -> String {

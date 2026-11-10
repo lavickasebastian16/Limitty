@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.03.002**
+**Version 1.04.000**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/l
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.03.002.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.03.002-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.03.002-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.04.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.04.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.04.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -21,7 +21,7 @@ Open the desktop app and press **Install agents**. It opens by itself the first 
    - **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`
    - **Codex:** the official release from [github.com/openai/codex](https://github.com/openai/codex/releases)
    - **Antigravity:** `curl -fsSL https://antigravity.google/cli/install.sh | bash`
-2. **Opens each sign-in** in a terminal window, one at a time, and moves on when you're done. If you're not ready, press **Skip**.
+2. **Opens each sign-in in your browser** (a new tab), one at a time, and moves on when you're done. Claude's page may show a code at the end: paste it into the box in Limitty. If you're not ready, press **Skip**.
 3. **Links your iPhone** through GitHub. The browser opens with the code already copied; you just approve it.
 4. **Adds the hooks** that report agent status and alerts to your phone.
 5. **Turns on start at login.**
@@ -31,7 +31,6 @@ The only things you do yourself are the sign-ins: once per agent, plus once on G
 From a terminal: `node src/agents/cli.js agents` shows what's installed. Then:
 - `agents use claude codex` sets your choice.
 - `agents install` installs the missing ones.
-- `agents login codex` signs in.
 
 Automatic install works on Linux and macOS. On Windows, install the agents from their websites.
 
@@ -64,7 +63,8 @@ Type one task and your agents handle it like a small company:
   - **On the PC:** type into the box at the top of the widget and press Enter. You can also use `limitty --prompt` (bind it to a key) or the Company window (the briefcase button).
   - **On the iPhone:** **Tasks → New task**.
   - **From a terminal:** `node src/agents/cli.js task "…" --in <folder>`.
-- **The CEO** (Claude Code by default) splits the task by **what each agent is good at**, not evenly:
+- **The team:** in the Company window, pick the **CEO** and give each agent a **role** (for example *Frontend: UI and CSS*, or *Backend and tests*). **Test team** checks that each agent answers.
+- **The CEO** splits the task by **each agent's role**, not evenly:
   - Antigravity might get the UI, Codex the API and tests, and Claude Code the tricky logic or a final review.
   - A small task goes to one agent.
   - Each step shows **why** that agent got it.
@@ -75,7 +75,7 @@ Type one task and your agents handle it like a small company:
   - **Antigravity:** Gemini Pro or Flash.
   - If two agents fit equally well, the one with more limit left gets it. Models under 15% left are avoided.
 - **The agents** do their parts in order, in your project folder. Each sees the earlier results.
-- **You follow along** on the PC or phone: the plan, each agent's output, and an alert when the task is done or fails. You can cancel, rerun or remove any task from either one.
+- **You get the result** in Limitty: on the PC (the widget shows *✓ Done*, the Company window shows the **Result**) and on the iPhone (Tasks → the task → **Result**), with an alert when it's done or fails. You can also see the plan and each agent's output, and cancel, rerun or remove any task from either one.
 
 Details:
 - **Agents edit your project directly**, like when you run them yourself. Use git so you can review or undo their changes.
@@ -87,7 +87,7 @@ Details:
 
 Open Settings from the menu (⋯) → **Settings…**, or run `limitty --settings`. Everything saves as you change it, and applies right away:
 - **The CEO:** Claude Code, Codex, Antigravity, or no AI (the whole task goes to the agent with the most limit left).
-- **What each agent is good at:** edit these to steer how work is split.
+- **Roles:** what each agent does; the CEO splits work by these. (Also in the Company window.)
 - **Permissions:** whether Claude Code may run shell commands.
 - **Antigravity models:** **Detect** fills in the Pro and Flash names from `agy models`.
 - **iPhone:** link or unlink it, and choose whether to be alerted when an agent finishes.

@@ -284,7 +284,7 @@ class Company extends EventEmitter {
       const t = this.store.get(task.id);
       if (!t || t.status !== 'planning') return; // cancelled meanwhile
       if (!plan) {
-        this.store.update(t.id, (x) => { x.status = 'failed'; x.error = 'No worker is available: install Claude Code, Codex or agy, or wait for a usage limit to reset.'; });
+        this.store.update(t.id, (x) => { x.status = 'failed'; x.error = 'No agent is ready. Open Agents (menu ⋯ → Agents) to install and sign in, or wait for a usage limit to reset.'; });
         this.emit('alert', { kind: 'failed', task: t });
       } else {
         this.store.update(t.id, (x) => {

@@ -21,16 +21,49 @@ function duration(a, b) {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }
 
+let teamCfg = null; // { ceo, strengths, defaultStrengths, agents }
+
+/** The team: who's the CEO, and each agent's role (what the CEO gives them). */
 function renderTeam() {
-  $('team').innerHTML = Object.keys(NAMES).filter((id) => state.workers[id]).map((id) => {
-    const t = state.team[id] || {};
-    const left = t.remaining == null ? '' : ` · ${Math.round(t.remaining)}% left`;
-    const what = !t.available ? 'unavailable' : t.busy ? 'busy' : 'free';
-    const models = (t.models || []).filter((m) => m.id !== 'default')
-      .map((m) => `${m.label}: ${m.remaining == null ? '?' : `${Math.round(m.remaining)}% left`}`).join('\n');
-    return `<span class="chip ${t.available ? '' : 'off'}" title="${esc(models)}"><span class="dot ${id}"></span>${NAMES[id]} · ${what}${left}</span>`;
+  if (!teamCfg) return;
+  if (document.activeElement?.closest('#roles, #ceo')) return; // don't redraw while you type
+  $('ceo').value = teamCfg.ceo;
+  $('roles').innerHTML = ['claude', 'codex', 'agy'].map((id) => {
+    const a = teamCfg.agents.find((x) => x.id === id) || {};
+    const t = state.team?.[id] || {};
+    const status = !a.chosen ? ['off', 'not used'] : !a.installed ? ['off', 'not installed'] : a.signedIn === false ? ['off', 'not signed in']
+      : t.busy ? ['', 'working'] : ['', t.remaining == null ? 'ready' : `ready · ${Math.round(t.remaining)}% left`];
+    return `<div class="role">
+      <div class="who"><span><span class="dot ${id}"></span>${NAMES[id]}${teamCfg.ceo === id ? ' <b class="ceo">CEO</b>' : ''}</span><small class="${status[0]}">${status[1]}</small></div>
+      <input data-role="${id}" list="roleIdeas" value="${esc(teamCfg.strengths[id])}" placeholder="${esc(teamCfg.defaultStrengths[id])}" aria-label="${NAMES[id]}'s role">
+    </div>`;
   }).join('');
 }
+
+async function loadTeam() {
+  teamCfg = await window.company.team();
+  renderTeam();
+}
+
+$('ceo').addEventListener('change', async (e) => { teamCfg = await window.company.setTeam({ ceo: e.target.value }); $('ceo').blur(); renderTeam(); });
+$('roles').addEventListener('change', async (e) => {
+  const id = e.target.dataset.role;
+  if (!id) return;
+  teamCfg = await window.company.setTeam({ strengths: { [id]: e.target.value } });
+});
+$('roles').addEventListener('focusout', () => setTimeout(renderTeam, 100));
+
+$('testTeam').addEventListener('click', async () => {
+  const box = $('testResults');
+  $('testTeam').disabled = true;
+  box.hidden = false;
+  box.innerHTML = '<div><span class="spin"></span>Asking each agent to reply… (up to 2 minutes)</div>';
+  const results = await window.company.testTeam();
+  $('testTeam').disabled = false;
+  box.innerHTML = results.map((r) => `<div class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'} ${NAMES[r.id]}: ${r.ok ? 'works' : 'problem'}</div>${r.ok ? '' : `<pre>${esc(r.text)}</pre>`}`).join('')
+    || '<div class="bad">No agents chosen. Open Agents… to install and sign in.</div>';
+  loadTeam();
+});
 
 function renderProjects() {
   const sel = $('project');
@@ -39,6 +72,20 @@ function renderProjects() {
     ? state.projects.map((p) => `<option value="${esc(p.name)}" title="${esc(p.path)}">${esc(p.name)}${p.saved === false ? ' (recent)' : ''}</option>`).join('')
     : '<option value="">Add a project folder →</option>';
   if (state.projects.some((p) => p.name === keep)) sel.value = keep;
+}
+
+/** The answer you asked for: the last step's output once the task is done (or how far it got). */
+function result(t) {
+  const steps = t.plan?.steps || [];
+  if (t.status === 'done') {
+    const last = [...steps].reverse().find((x) => x.status === 'done' && x.output);
+    return last ? `<div class="result"><b>Result</b><pre>${esc(last.output)}</pre></div>` : '';
+  }
+  if (t.status === 'failed') {
+    const last = [...steps].reverse().find((x) => x.output && x.status === 'failed');
+    return last ? `<div class="result failed"><b>What went wrong</b><pre>${esc(last.output)}</pre></div>` : '';
+  }
+  return '';
 }
 
 function renderTasks() {
@@ -66,8 +113,10 @@ function renderTasks() {
         <span class="status ${t.status}">${t.status === 'planning' ? '<span class="spin"></span>' : ''}${STATUS[t.status]}</span>
       </header>
       ${t.plan ? `<p class="plan">CEO (${NAMES[t.plan.by] || t.plan.by}): ${esc(t.plan.summary)}</p>` : ''}
-      ${steps ? `<ul class="steps">${steps}</ul>` : ''}
+      ${result(t)}
       ${t.error ? `<p class="error">${esc(t.error)}</p>` : ''}
+      ${steps ? (active ? `<ul class="steps">${steps}</ul>`
+        : `<details class="how" data-key="${t.id}:how" ${openOutputs.has(`${t.id}:how`) ? 'open' : ''}><summary>How the team did it (${t.plan.steps.length} step${t.plan.steps.length > 1 ? 's' : ''})</summary><ul class="steps">${steps}</ul></details>`) : ''}
       <div class="actions">
         ${active ? `<button class="small ghost" data-act="cancel" data-id="${t.id}">Cancel</button>` : ''}
         ${['failed', 'cancelled', 'done'].includes(t.status) ? `<button class="small ghost" data-act="retry" data-id="${t.id}">Run again</button>` : ''}
@@ -109,7 +158,15 @@ $('new').addEventListener('submit', async (e) => {
   const title = $('title').value.trim();
   const project = $('project').value;
   $('formError').hidden = true;
-  if (!project) { $('formError').textContent = 'Add a project folder first.'; $('formError').hidden = false; return; }
+  if (!project) {
+    // No project yet: pick the folder now, then send.
+    const name = await window.company.addProject();
+    if (!name) { $('formError').textContent = 'Pick the project folder the team should work in.'; $('formError').hidden = false; return; }
+    await new Promise((r) => setTimeout(r, 600));
+    render(await window.company.state());
+    $('project').value = name;
+    return $('new').requestSubmit();
+  }
   $('submit').disabled = true;
   await window.company.create({ title, project, worker: $('worker').value });
   $('title').value = '';
@@ -118,5 +175,7 @@ $('new').addEventListener('submit', async (e) => {
 
 window.company.onUpdate(render);
 window.company.state().then(render);
+loadTeam();
+setInterval(loadTeam, 15000);
 setInterval(async () => render(await window.company.state()), 5000); // keep times fresh
-document.getElementById('chooseAgents').addEventListener('click', () => window.company.chooseAgents());
+$('chooseAgents').addEventListener('click', () => window.company.chooseAgents());

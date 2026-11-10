@@ -72,6 +72,14 @@ public struct CompanyTask: Codable, Hashable, Identifiable, Sendable {
 
     public var isActive: Bool { ["queued", "planning", "running"].contains(status) }
 
+    /// The answer: the last step's output once the task is done (or the failed step's).
+    public var result: String? {
+        let steps = plan?.steps ?? []
+        let want = status == "done" ? "done" : status == "failed" ? "failed" : nil
+        guard let want else { return nil }
+        return steps.last { $0.status == want && !($0.output ?? "").isEmpty }?.output
+    }
+
     public var statusLabel: String {
         switch status {
         case "queued": "Waiting"

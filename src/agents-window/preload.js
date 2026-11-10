@@ -8,6 +8,8 @@ contextBridge.exposeInMainWorld('agents', {
   setup: () => ipcRenderer.invoke('agents:setup'),
   install: (id) => ipcRenderer.invoke('agents:install', id),
   skip: (id) => ipcRenderer.invoke('agents:skip', id),
+  code: (id, code) => ipcRenderer.invoke('agents:code', id, code),
+  reopen: (id) => ipcRenderer.send('agents:reopen', id),
   openExternal: (url) => ipcRenderer.send('agents:open', url),
   login: (id) => ipcRenderer.invoke('agents:login', id),
   done: () => ipcRenderer.send('agents:done'),

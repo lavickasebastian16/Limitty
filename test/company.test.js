@@ -119,7 +119,7 @@ test('no workers installed → clear failure', async () => {
   const t = c.create({ title: 'x', project: PROJECT });
   c.tick();
   await until(() => c.store.get(t.id).status === 'failed');
-  assert.match(c.store.get(t.id).error, /No worker is available/);
+  assert.match(c.store.get(t.id).error, /No agent is ready/);
   c.stop();
 });
 
@@ -252,4 +252,11 @@ test('Cancel stops the agent and the commands it started', { skip: process.platf
   } finally {
     process.env.PATH = savedPath;
   }
+});
+
+test('a sign-in failure from an agent becomes a clear message', () => {
+  const { explain } = require('../src/company/workers');
+  assert.match(explain('claude', 'Invalid API key · Please run /login'), /^Claude Code isn't signed in\. Open Agents/);
+  assert.match(explain('codex', 'Error: 401 Unauthorized'), /^Codex isn't signed in/);
+  assert.strictEqual(explain('codex', 'error: tests failed'), null);
 });
