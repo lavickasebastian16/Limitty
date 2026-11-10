@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Limitty</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card" id="card">
+    <header class="bar">
+      <span class="title">Limitty</span>
+      <span class="updated" id="updated"></span>
+      <button class="icon" id="refresh" title="Refresh" aria-label="Refresh">
+        <svg viewBox="0 0 16 16" width="13" height="13"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon" id="menu" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 16 16" width="13" height="13"><circle cx="3" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="13" cy="8" r="1.4" fill="currentColor"/></svg>
+      </button>
+      <button class="icon" id="hide" title="Hide to tray" aria-label="Hide">
+        <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </header>
+    <section id="providers"><div class="empty">Loading limits…</div></section>
+  </main>
+  <script src="render.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
