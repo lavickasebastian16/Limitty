@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.03.001**
+**Version 1.03.002**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/l
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.03.001.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.03.001-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.03.001-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.03.002.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.03.002-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.03.002-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -39,14 +39,12 @@ Automatic install works on Linux and macOS. On Windows, install the agents from 
 
 On the iPhone, open **Notifications**. You get one sound when an agent **needs your permission** (or has a question), and a different one when it's **done**. Company tasks that finish or fail alert you too. Pick both sounds from Limitty's own set (Alert, Knock knock, Ping, Chime, Success) and tap ▶︎ to preview.
 
-Limitty posts these itself, while it's open and when iOS wakes it in the background. iPhone apps installed without a paid Apple developer account can't receive instant pushes, so an alert can arrive late, or only when you open Limitty. Your PC's optional ntfy alerts (`node src/agents/cli.js pair`) are a separate extra with ntfy's own sound.
+Limitty posts these itself, while it's open and when iOS wakes it in the background. iPhone apps installed without a paid Apple developer account can't receive instant pushes, so an alert can arrive late, or only when you open Limitty.
 
 ## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
 A native SwiftUI app with Home Screen and Lock Screen widgets. You build and install it with [xtool](https://github.com/xtool-org/xtool) from Linux or Windows (WSL); you don't need a Mac.
 Guide: **[ios/README.md](ios/README.md)**.
-
-Rather not set up xtool? [`scriptable/`](scriptable/README.md) has a lighter widget-only version for the free Scriptable app.
 
 ## 🤖 Agent status on your iPhone (Claude Code, Codex, agy)
 
@@ -189,7 +187,7 @@ npm and Electron need plain semver, so `1.01.000` is stored there as `1.1.0`. Th
 ## Development
 
 ```bash
-npm test                 # desktop + Scriptable tests
+npm test                 # desktop tests
 (cd ios && swift test)   # iPhone app core tests (works on Linux)
 npm run check            # print live limits in the terminal
 node scripts/make-icon.js  # regenerate the icons
@@ -204,8 +202,13 @@ src/preload.js           Safe bridge between the window and the main process
 src/renderer/            Widget UI (HTML/CSS/JS)
 src/providers/           One module per service: claude.js, codex.js, antigravity.js
 src/cli.js               Terminal output
+src/agents/              Agent status: hooks, background relay, GitHub link
+src/company/             Company: the CEO, workers and tasks
+src/tools.js             Installing and signing in to the agents
+src/settings.js          Settings (~/.limitty/agent.json)
+src/*-window/            Company, Agents and Settings windows
+linux/                   Omarchy installer, Hyprland and Waybar config
 ios/                     iPhone app + widget (SwiftUI, built with xtool)
-scriptable/              iPhone widget as a Scriptable script
 ```
 
 ## Register the GitHub sign-in (one time)
@@ -226,21 +229,14 @@ scriptable/              iPhone widget as a Scriptable script
 | **Antigravity (agy)** | hooks in `~/.gemini/config/hooks.json` | ⚠️ guessed, the same way as Codex | ✅ Stop hook |
 
 - **Commands:**
-  - `npm run agent:setup` signs in with GitHub and installs the hooks; add `-- --qr` to pair with a QR code and the ntfy relay instead, with no GitHub account.
-  - `npm run agent` runs the relay (setup already makes it start at login on Windows, macOS and Linux with systemd).
+  - `npm run agent:setup` signs in with GitHub and installs the hooks (the desktop app's **Install agents** does this for you).
+  - `npm run agent` runs it in the background without the desktop app (setup makes it start at login).
   - `npm run agent:status` shows what it sees.
-  - `node src/agents/cli.js test` sends a test alert.
-  - `node src/agents/cli.js pair` shows the QR code again.
   - `node src/agents/cli.js logout` signs the PC out of GitHub.
   - `node src/agents/cli.js uninstall` removes the hooks and the start-at-login entry.
 - **Restart open agent sessions** after setup so they load the hooks.
 - **WSL:** run the agent **inside WSL** if your agents run there.
 - **Privacy:**
-  - With GitHub sign-in, status (agent name, project folder, state) lives in a private ("secret") Gist on your account. Only you can list it; delete the Gist to remove it.
-  - With QR pairing, status is encrypted (AES-256-GCM) with a key that's only on your PC and phone. ntfy only sees ciphertext.
-  - Push alerts are plain text so the ntfy app can show them: agent name, project folder, and the prompt message. Set `"showProjectNames": false` in `~/.limitty/agent.json` to send only the agent name.
-- **Limits:**
-  - GitHub mode updates the Gist at most every 15 s, plus every 10 minutes as a heartbeat, well within GitHub's API limits.
-  - ntfy.sh's free tier allows 250 messages a day per IP address (it's used for push alerts, and for status in QR mode). Limitty sends status only when something changes (at most every 30 s), plus a heartbeat every 30 minutes, and slows down if it gets close to the limit.
-  - For more, set `server` and `token` in `~/.limitty/agent.json` to your own ntfy server or a paid account, then pair again.
-- **Desktop widget:** while it's open, the desktop widget runs the relay too, so only one copy runs.
+  - Status and tasks (agent name, project folder, state, task text and output) live in a private ("secret") Gist on your GitHub account and go nowhere else. Only you can list it; delete the Gist to remove it.
+- **Limits:** the PC updates the Gist at most every 15 s (right away when an agent needs you or a task finishes), plus a heartbeat every 10 minutes, well within GitHub's API limits.
+- **One copy runs:** the desktop app or `npm run agent`, whichever starts first.

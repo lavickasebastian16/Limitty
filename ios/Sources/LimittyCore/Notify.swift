@@ -8,7 +8,7 @@ import FoundationNetworking
 //
 // Limitty posts local notifications with its own sounds, while the app is open
 // and when iOS wakes it in the background. (Limitty can't receive pushes without a
-// paid Apple developer account.) The PC's ntfy alerts are a separate, optional extra.
+// paid Apple developer account.)
 
 public enum AlertKind: String, Codable, Sendable { case attention, done }
 

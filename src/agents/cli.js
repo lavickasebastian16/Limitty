@@ -5,10 +5,9 @@
 // Antigravity (agy) are working, need your attention, or are idle.
 //
 //   npm run agent:setup     sign in with GitHub and install the hooks
-//                           (--qr: pair with a QR code instead, no GitHub)
-//   npm run agent           run the relay (setup can make it start at login)
+//   npm run agent           run in the background (setup makes it start at login)
 //
-//   node src/agents/cli.js status | pair | test | uninstall
+//   node src/agents/cli.js status | tasks | task "…" | logout | uninstall
 //   node src/agents/cli.js agents [use|install|login] [claude codex agy]
 
 const fs = require('fs');
@@ -33,12 +32,10 @@ async function main() {
     case 'agents': return agentsCmd(args);
     case 'task': return task(args);
     case 'tasks': return tasks();
-    case 'pair': return pair(config.ensure());
     case 'logout': require('./connect').disconnect(); console.log('Signed out of GitHub. Run setup to connect again.'); return;
-    case 'test': return test();
     case 'uninstall': return uninstall();
     default:
-      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|agents [use|install|login] [claude codex agy]|status|task "…" [--in dir] [--worker w]|tasks|pair|test|logout|uninstall>');
+      console.log('Usage: limitty-agent <setup [--relogin] [--no-autostart]|run|agents [use|install|login] [claude codex agy]|status|task "…" [--in dir] [--worker w]|tasks|logout|uninstall>');
       process.exitCode = cmd ? 1 : 0;
   }
 }
@@ -50,23 +47,11 @@ function hook(args) {
   return require('./hook').main(args);
 }
 
-
-
 // ───────────── setup ─────────────
 
 async function setup(argv) {
   console.log('\nLimitty agent setup\n');
   const report = ([name, ok, msg]) => console.log(`  ${ok ? '✓' : '✗'} ${name}: ${msg}`);
-
-  if (argv.includes('--qr')) {
-    // Older pairing: QR code + encrypted ntfy relay, no GitHub account.
-    const cfg = config.ensure();
-    require('./connect').installHooks().forEach(report);
-    if (!argv.includes('--no-autostart')) startAtLogin(report);
-    console.log('\nRestart any running Claude Code / Codex / agy sessions so they pick up the hooks.\n');
-    await pair(cfg);
-    return;
-  }
 
   const { connect } = require('./connect');
   try {
@@ -104,22 +89,7 @@ function openBrowser(url) {
   } catch { /* the URL is printed anyway */ }
 }
 
-async function pair(cfg) {
-  const link = config.pairingLink(cfg);
-  console.log('Pair your iPhone: scan this with the Camera app (it opens Limitty),');
-  console.log('or copy the link into Limitty → Agents → Pair with PC.\n');
-  try {
-    require('qrcode-terminal').generate(link, { small: true }, (qr) => console.log(qr));
-  } catch {
-    console.log('(Run `npm install` to show a QR code here.)');
-  }
-  console.log(`${link}\n`);
-  console.log('Push alerts: install the free "ntfy" app on your iPhone and subscribe to');
-  console.log(`  server ${cfg.server}   topic ${config.alertsTopic(cfg)}\n`);
-  console.log('Keep the link and topic private: anyone with them can see or send your alerts.');
-}
-
-// ───────────── run / status / test / uninstall ─────────────
+// ───────────── run / status / uninstall ─────────────
 
 function run() {
   const log = (m) => {
@@ -178,18 +148,6 @@ function status() {
   for (const s of sessions) {
     console.log(`${icon[s.state] || '-'} ${s.agent.padEnd(7)} ${String(s.project || '').padEnd(24)} ${s.state.padEnd(9)} ${s.detail}`);
   }
-  if (saved.budget) console.log(`\nntfy messages used today: ${saved.budget.used}/250`);
-}
-
-async function test() {
-  const cfg = config.load();
-  if (!cfg) { console.error('Not set up yet. Run: npm run agent:setup'); return; }
-  const res = await fetch(`${cfg.server}/${config.alertsTopic(cfg)}`, {
-    method: 'POST',
-    body: 'If you can read this on your iPhone, alerts work.',
-    headers: { Title: 'Limitty test alert', Tags: 'tada', ...(cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {}) },
-  });
-  console.log(res.ok ? 'Sent a test alert.' : `ntfy returned HTTP ${res.status}`);
 }
 
 function uninstall() {
@@ -197,7 +155,7 @@ function uninstall() {
     try { const f = fn(); console.log(`  ✓ ${name}: ${f ? `removed from ${f}` : 'nothing to remove'}`); } catch (e) { console.log(`  ✗ ${name}: ${e.message}`); }
   }
   try { console.log(`  ✓ Start at login: ${autostart(false)}`); } catch (e) { console.log(`  ✗ Start at login: ${e.message}`); }
-  console.log(`\nYour pairing key is kept in ${config.FILES.config}. Delete that folder to forget it.`);
+  console.log(`\nYour settings and GitHub link are kept in ${config.FILES.config}. Delete that folder to forget them.`);
 }
 
 // ───────────── start at login ─────────────

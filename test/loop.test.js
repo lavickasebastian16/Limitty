@@ -3,7 +3,7 @@
 // The whole phone → PC → phone loop, with a pretend GitHub Gist and pretend agents:
 // the phone adds a task to limitty-inbox.json (exactly as the iPhone app writes it),
 // the PC picks it up, the CEO splits it by strengths, the workers run, and the
-// result lands in limitty-tasks.json with a "done" alert.
+// result lands in limitty-tasks.json, where the phone turns it into a "done" alert.
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -14,7 +14,6 @@ const path = require('path');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-loop-'));
 process.env.LIMITTY_HOME = path.join(HOME, '.limitty');
 
-const config = require('../src/agents/config');
 const { Daemon } = require('../src/agents/daemon');
 const { Company } = require('../src/company/company');
 const { TaskStore } = require('../src/company/store');
@@ -27,10 +26,9 @@ const until = async (fn, ms = 5000) => {
   }
 };
 
-/** A pretend api.github.com Gist + ntfy. */
+/** A pretend api.github.com Gist. */
 function fakeCloud() {
   const files = {};
-  const ntfy = [];
   const fetchImpl = async (url, init = {}) => {
     const method = init.method || 'GET';
     if (url === 'https://api.github.com/gists/g1') {
@@ -40,10 +38,9 @@ function fakeCloud() {
       }
       return { ok: true, status: 200, json: async () => ({ files: Object.fromEntries(Object.entries(files).map(([n, c]) => [n, { content: c }])) }) };
     }
-    if (url.startsWith('https://ntfy.sh/')) { ntfy.push({ url, body: init.body }); return { ok: true, status: 200 }; }
     throw new Error(`unexpected ${method} ${url}`);
   };
-  return { files, ntfy, fetchImpl };
+  return { files, fetchImpl };
 }
 
 test('phone → PC → phone: a task from the iPhone is split by strengths, done, and reported back', async () => {
@@ -69,7 +66,7 @@ test('phone → PC → phone: a task from the iPhone is split by strengths, done
     workerOptions: { strengths: { agy: 'frontend/UI work, CSS, quick edits' } },
   });
   company.addProject(project);
-  const cfg = { ...config.DEFAULTS, topic: 'limitty-loop', key: config.base64url(Buffer.alloc(32, 2)), github: { token: 't', gistId: 'g1', login: 'me' } };
+  const cfg = { github: { token: 't', gistId: 'g1', login: 'me' } };
   const daemon = new Daemon(cfg, { fetchImpl: cloud.fetchImpl, company, skipLock: true });
 
   // The phone writes its inbox like GitHubStatusFeed.send (CompanyRequest, JSONEncoder).
@@ -87,18 +84,13 @@ test('phone → PC → phone: a task from the iPhone is split by strengths, done
   // The CEO saw the strengths you set.
   assert.match(prompts.find((p) => p.mode === 'plan').prompt, /antigravity.*Good at: frontend\/UI work, CSS, quick edits/i);
 
-  // The phone's view: the tasks file in the Gist shows it done, with the CEO's reasons.
-  daemon.requestStatus(true);
+  // The phone's view: the tasks file in the Gist shows it done (sent right away when
+  // the task finished), with the CEO's reasons.
   await until(() => JSON.parse(cloud.files['limitty-tasks.json'] || '{"tasks":[]}').tasks[0]?.status === 'done');
   const phoneView = JSON.parse(cloud.files['limitty-tasks.json']).tasks[0];
   assert.strictEqual(phoneView.title, 'Add a checkout page with payments');
   assert.deepStrictEqual(phoneView.plan.steps.map((s) => s.why), ['frontend/UI work', 'well-scoped implementation', 'reviewing changes across files']);
 
-  // "Done" push alert.
-  await until(() => cloud.ntfy.some((n) => n.url.includes('-alerts?')));
-  const alert = new URL(cloud.ntfy.find((n) => n.url.includes('-alerts?')).url);
-  assert.match(alert.searchParams.get('title'), /^Task done/);
-  assert.strictEqual(alert.searchParams.get('click'), 'limitty://tasks');
 
   // The same inbox read again doesn't create the task twice.
   await daemon.pollInbox();

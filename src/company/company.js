@@ -96,6 +96,8 @@ class Company extends EventEmitter {
   }
 
   retry(id) {
+    // A task that's still going keeps going (the phone can ask at any moment).
+    if (['queued', 'planning', 'running'].includes(this.store.get(id)?.status)) return;
     this.store.update(id, (t) => {
       t.status = 'queued';
       t.error = null;
@@ -268,6 +270,11 @@ class Company extends EventEmitter {
   }
 
   plan(task) {
+    if (!task.project?.path || !fs.existsSync(task.project.path)) {
+      this.store.update(task.id, (t) => { t.status = 'failed'; t.error = `The project folder for “${task.project?.name}” isn't there. Pick a project and send the task again.`; });
+      this.changed();
+      return;
+    }
     this.store.update(task.id, (t) => { t.status = 'planning'; });
     this.changed();
     const job = makePlan(task, this.team(), { ceo: this.ceo, runImpl: this.runImpl, opts: this.workerOptions });

@@ -143,14 +143,5 @@ function fingerprint(snap) {
   return JSON.stringify(snap.sessions.map((s) => [s.agent, s.id, s.state, s.detail, s.project]));
 }
 
-function alertText(alert, { showProjectNames }) {
-  const s = alert.session;
-  const name = AGENTS[s.agent] || s.agent;
-  const where = showProjectNames && s.project ? ` · ${s.project}` : '';
-  if (alert.kind === 'attention') {
-    return { title: `${name} needs you${where}`, body: showProjectNames ? s.detail : 'Open your PC to respond.', priority: 4, tags: 'warning' };
-  }
-  return { title: `${name} finished${where}`, body: 'Waiting for your next prompt.', priority: 3, tags: 'white_check_mark' };
-}
 
-module.exports = { applyEvent, tick, snapshot, fingerprint, alertText, AGENTS, PENDING_TOOL_MS, STALE_WORKING_MS };
+module.exports = { applyEvent, tick, snapshot, fingerprint, AGENTS, PENDING_TOOL_MS, STALE_WORKING_MS };

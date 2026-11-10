@@ -139,6 +139,8 @@ function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts
         env: { ...process.env, ...cmd.env },
         stdio: [cmd.stdin == null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
         windowsHide: true,
+        // Own process group, so Cancel also stops the commands the agent started.
+        detached: process.platform !== 'win32',
       });
     } catch (e) {
       done({ ok: false, text: `Couldn't start ${WORKERS[worker].name}: ${e.message}`, code: null });
@@ -166,14 +168,16 @@ function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts
   };
 }
 
+/** Stops the agent and everything it started (its whole process group). */
 function kill(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child?.pid) return;
   if (process.platform === 'win32') {
     try { require('child_process').execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ }
-  } else {
-    try { child.kill('SIGTERM'); } catch { /* gone */ }
-    setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* gone */ } }, 5000).unref();
+    return;
   }
+  const signal = (sig) => { try { process.kill(-child.pid, sig); } catch { try { child.kill(sig); } catch { /* gone */ } } };
+  signal('SIGTERM');
+  setTimeout(() => signal('SIGKILL'), 5000).unref();
 }
 
 function tail(s) {

@@ -39,15 +39,13 @@ function render(all = true) {
   $('allowCommands').checked = s.allowCommands;
   $('agyPro').value = s.agyModels.pro;
   $('agyFlash').value = s.agyModels.flash;
-  $('alertOnFinish').checked = s.alertOnFinish;
-  $('showProjectNames').checked = s.showProjectNames;
   $('refreshMinutes').value = String(s.refreshMinutes);
   $('alwaysOnTop').checked = s.alwaysOnTop;
   $('startAtLogin').checked = s.startAtLogin;
 }
 
 $('ceo').addEventListener('change', (e) => save({ ceo: e.target.value }));
-for (const id of ['allowCommands', 'alertOnFinish', 'showProjectNames', 'alwaysOnTop', 'startAtLogin']) {
+for (const id of ['allowCommands', 'alwaysOnTop', 'startAtLogin']) {
   $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
 }
 $('refreshMinutes').addEventListener('change', (e) => save({ refreshMinutes: Number(e.target.value) }));
@@ -73,5 +71,4 @@ $('phoneButton').addEventListener('click', async () => {
   render(false);
 });
 
-settings.onUpdate((x) => { s = x; render(false); });
 settings.get().then((x) => { s = x; render(); });

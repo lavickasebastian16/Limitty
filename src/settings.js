@@ -11,7 +11,7 @@ const tools = require('./tools');
 const CEOS = ['claude', 'codex', 'agy', 'rules'];
 
 function read() {
-  const c = config.load() || { ...config.DEFAULTS };
+  const c = config.ensure();
   const w = c.workers || {};
   return {
     ceo: CEOS.includes(c.ceo) ? c.ceo : 'claude',
@@ -19,8 +19,6 @@ function read() {
     defaultStrengths: Object.fromEntries(Object.entries(WORKERS).map(([id, x]) => [id, x.strengths])),
     allowCommands: w.allowCommands !== false,
     agyModels: { pro: w.agyModels?.pro || '', flash: w.agyModels?.flash || '' },
-    alertOnFinish: c.alertOnFinish !== false,
-    showProjectNames: c.showProjectNames !== false,
     github: c.github?.token ? { login: c.github.login || null } : null,
   };
 }
@@ -46,8 +44,6 @@ function write(patch = {}) {
     if (m.pro || m.flash) c.workers.agyModels = Object.fromEntries(Object.entries(m).filter(([, v]) => v));
     else delete c.workers.agyModels;
   }
-  if (typeof patch.alertOnFinish === 'boolean') c.alertOnFinish = patch.alertOnFinish;
-  if (typeof patch.showProjectNames === 'boolean') c.showProjectNames = patch.showProjectNames;
   config.save(c);
   return read();
 }

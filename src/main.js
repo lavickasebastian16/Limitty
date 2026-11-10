@@ -132,14 +132,14 @@ function agentsMenuItem() {
   const gh = agentConfig()?.github;
   if (gh?.gistId) {
     return {
-      label: `Agents → iPhone: @${gh.login}`,
+      label: `iPhone: linked as @${gh.login}`,
       submenu: [
         { label: 'Reinstall agent hooks', click: () => { require('./agents/connect').installHooks(); dialog.showMessageBox({ message: 'Agent hooks reinstalled. Restart open agent sessions to pick them up.' }); } },
-        { label: 'Disconnect', click: () => { require('./agents/connect').disconnect(); host?.detachRelay?.(); updateTray(); } },
+        { label: 'Unlink', click: () => { require('./agents/connect').disconnect(); host?.detachRelay?.(); updateTray(); } },
       ],
     };
   }
-  return { label: 'Connect agents to iPhone…', click: connectAgents };
+  return { label: 'Link iPhone…', click: connectAgents };
 }
 
 let connecting = false;
@@ -408,10 +408,6 @@ function settingsState() {
     agents: tools.status(),
     version: VERSION,
   };
-}
-
-function pushSettingsState() {
-  settingsWin?.webContents.send('settings:update', settingsState());
 }
 
 function setupSettingsIpc() {

@@ -6,8 +6,6 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var loginFor: Provider?
-    @State private var showPair = false
-    @State private var showAlerts = false
     @State private var showGitHub = false
     @State private var showNewTask = false
     @State private var showNotifications = false
@@ -16,7 +14,7 @@ struct ContentView: View {
         NavigationStack {
             List {
                 TasksSection(showNewTask: $showNewTask, showGitHub: $showGitHub)
-                AgentsSection(showPair: $showPair, showAlerts: $showAlerts, showGitHub: $showGitHub)
+                AgentsSection(showGitHub: $showGitHub)
                 if model.agentsConnected {
                     NotificationsRow(show: $showNotifications)
                 }
@@ -96,8 +94,6 @@ struct ContentView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showPair) { PairView() }
-            .sheet(isPresented: $showAlerts) { AlertsSetupView() }
             .sheet(isPresented: $showGitHub) { GitHubLoginView() }
             .sheet(isPresented: $showNewTask) { NewTaskView() }
             .sheet(isPresented: $showNotifications) { NotificationsView() }

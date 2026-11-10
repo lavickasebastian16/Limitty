@@ -205,7 +205,7 @@ struct AgentsTimeline: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (AgentsEntry) -> Void) {
         let store = SharedStore.shared
         let cached = store.cachedAgentStatus()
-        completion(AgentsEntry(date: .now, paired: store.githubAccount() != nil || store.agentPairing() != nil || context.isPreview,
+        completion(AgentsEntry(date: .now, paired: store.githubAccount() != nil || context.isPreview,
                                status: cached ?? (context.isPreview ? AgentSample.status() : nil)))
     }
 
@@ -216,15 +216,13 @@ struct AgentsTimeline: TimelineProvider {
             var fresh: AgentStatus?
             if let gh = store.githubAccount() {
                 fresh = (try? await GitHubStatusFeed().fetch(gh)) ?? nil
-            } else if let pairing = store.agentPairing() {
-                fresh = (try? await AgentFeed().fetch(pairing)) ?? nil
             }
             if let fresh {
                 status = fresh
                 store.saveAgentStatus(fresh)
             }
-            // iOS limits how often widgets refresh; open Limitty or use ntfy alerts for instant updates.
-            let paired = store.githubAccount() != nil || store.agentPairing() != nil
+            // iOS limits how often widgets refresh; open Limitty for instant updates.
+            let paired = store.githubAccount() != nil
             completion(Timeline(entries: [AgentsEntry(date: .now, paired: paired, status: status)],
                                 policy: .after(.now.addingTimeInterval(5 * 60))))
         }

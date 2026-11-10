@@ -9,5 +9,4 @@ contextBridge.exposeInMainWorld('settings', {
   linkPhone: () => ipcRenderer.invoke('settings:linkPhone'),
   unlinkPhone: () => ipcRenderer.invoke('settings:unlinkPhone'),
   openAgents: () => ipcRenderer.send('window:agents'),
-  onUpdate: (cb) => ipcRenderer.on('settings:update', (_e, s) => cb(s)),
 });

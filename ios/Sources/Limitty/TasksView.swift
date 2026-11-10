@@ -13,7 +13,7 @@ struct TasksSection: View {
             if !model.canSendTasks {
                 Text(model.github == nil
                      ? "Sign in with GitHub (below) and connect your PC to give tasks to your agents."
-                     : "Connect your PC (Limitty desktop app → Connect agents to iPhone…) to give it tasks.")
+                     : "Link your PC: in the Limitty desktop app press Install agents, or Settings → iPhone → Link iPhone….")
                     .font(.footnote).foregroundStyle(.secondary)
             } else {
                 Button {
@@ -23,7 +23,7 @@ struct TasksSection: View {
                 }
                 .disabled(model.company?.projects.isEmpty ?? true)
                 if model.company?.projects.isEmpty ?? true {
-                    Text("Add a project folder in the Company window on your PC first.")
+                    Text("Add a project folder on your PC first (the prompt box or the Company window).")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 ForEach(model.pendingTasks, id: \.id) { req in

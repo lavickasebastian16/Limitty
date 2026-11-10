@@ -1,32 +1,20 @@
 'use strict';
 
 // The background part of the PC companion: reads hook events and Codex logs,
-// keeps track of each agent session, and relays status to your iPhone.
-//
-// Where status goes:
-//  - Signed in with GitHub (the default): a private Gist on your account, which
-//    the iPhone app reads after you sign in there too. At most every 15 s, plus a
-//    heartbeat every 10 minutes.
-//  - Otherwise (QR-code pairing): encrypted to an ntfy topic. ntfy.sh's free tier
-//    allows 250 messages a day per IP, so at most every 30 s, heartbeat every 30 min.
-// Push alerts always go through ntfy, right away.
+// keeps track of each agent session, and shares status and tasks with your iPhone
+// through a private GitHub Gist (at most every 15 s, right away when an agent needs
+// you or finishes, plus a heartbeat every 10 minutes). The phone turns changes into
+// notifications.
 
 const fs = require('fs');
 const os = require('os');
-const { FILES, alertsTopic } = require('./config');
-const { seal } = require('./crypto');
-const { applyEvent, tick, snapshot, fingerprint, alertText } = require('./state');
+const { FILES } = require('./config');
+const { applyEvent, tick, snapshot, fingerprint } = require('./state');
 const { CodexWatcher } = require('./codex');
 const github = require('./github');
 
-const STATUS_MIN_INTERVAL_MS = 30_000;
-const STATUS_SLOW_INTERVAL_MS = 5 * 60_000; // when the daily budget runs low
-const HEARTBEAT_MS = 30 * 60_000;
 const GIST_MIN_INTERVAL_MS = 15_000;
 const GIST_HEARTBEAT_MS = 10 * 60_000;
-const DAILY_BUDGET = 250;
-const SLOW_DOWN_AT = 180;
-const ALERT_RESERVE = 10;
 
 class Daemon {
   constructor(cfg, { log = () => {}, fetchImpl = globalThis.fetch, now = () => Date.now(), company = null, skipLock = false } = {}) {
@@ -38,17 +26,14 @@ class Daemon {
     this.offset = 0;
     this.lastPrint = '';
     this.lastStatusAt = 0;
-    this.pendingStatus = false;
-    this.budget = { day: 0, used: 0 };
-    this.backoffUntil = 0;
     this.gistBackoffUntil = 0;
-    this.recentAlerts = new Map();
     this.codex = new CodexWatcher();
     this.timers = [];
     this.company = company;
     this.skipLock = skipLock;
     this.onCompanyChange = () => this.requestStatus();
-    this.onCompanyAlert = (a) => this.sendTaskAlert(a);
+    // A task finished or failed: tell the phone now rather than in up to 15 s.
+    this.onCompanyAlert = () => this.requestStatus(true);
     if (company) {
       company.recentFolders = () => Object.values(this.sessions).map((s) => s.cwd).filter(Boolean);
       company.on('change', this.onCompanyChange);
@@ -73,7 +58,7 @@ class Daemon {
     this.requestStatus(true);
     this.log(this.cfg.github?.gistId
       ? `Limitty agent running. Sharing status with your iPhone via GitHub (@${this.cfg.github.login || 'you'}).`
-      : `Limitty agent running. Relaying to ${this.cfg.server}/${this.cfg.topic}`);
+      : 'Limitty agent running. Not linked to an iPhone yet.');
     return true;
   }
 
@@ -93,14 +78,13 @@ class Daemon {
       const saved = JSON.parse(fs.readFileSync(FILES.state, 'utf8'));
       this.sessions = saved.sessions || {};
       this.offset = saved.offset || 0;
-      this.budget = saved.budget || this.budget;
     } catch { /* first run */ }
   }
 
   persist() {
     try {
       fs.mkdirSync(FILES.dir, { recursive: true });
-      fs.writeFileSync(FILES.state, JSON.stringify({ sessions: this.sessions, offset: this.offset, budget: this.budget }));
+      fs.writeFileSync(FILES.state, JSON.stringify({ sessions: this.sessions, offset: this.offset }));
     } catch { /* ignore */ }
   }
 
@@ -129,12 +113,14 @@ class Daemon {
 
   ingest(events) {
     if (!events.length) return;
+    let alerted = false;
     for (const ev of events) {
       const r = applyEvent(this.sessions, ev);
       this.sessions = r.sessions;
-      if (r.alert) this.sendAlert(r.alert);
+      if (r.alert) alerted = true;
     }
-    this.requestStatus();
+    // Needs you / finished: the phone should hear about it right away.
+    this.requestStatus(alerted);
     this.persist();
   }
 
@@ -150,37 +136,24 @@ class Daemon {
   // ───── output ─────
 
   requestStatus(force = false) {
+    const gh = this.cfg.github;
+    if (!gh?.token || !gh.gistId) return;
     const now = this.now();
     const snap = snapshot(this.sessions, { host: os.hostname(), now });
     const print = fingerprint(snap) + (this.company ? this.company.fingerprint() : '');
-    const changed = print !== this.lastPrint;
-    const gh = this.cfg.github;
-    const heartbeatDue = now - this.lastStatusAt > (gh ? GIST_HEARTBEAT_MS : HEARTBEAT_MS);
-    if (!changed && !heartbeatDue && !force) return;
-
-    if (gh?.token && gh.gistId) {
-      if (!force && now - this.lastStatusAt < GIST_MIN_INTERVAL_MS) return;
-      if (now < this.gistBackoffUntil) return;
-      this.lastPrint = print;
-      this.lastStatusAt = now;
-      // The phone learns where to subscribe for push alerts from the status itself.
-      const status = { ...snap, alertsTopic: alertsTopic(this.cfg), ntfyServer: this.cfg.server };
-      const files = { [github.STATUS_FILE]: status };
-      if (this.company) files[github.TASKS_FILE] = this.company.snapshot();
-      github.writeFiles(gh.token, gh.gistId, files, this.fetch).catch((e) => {
-        this.log(`Couldn't update the GitHub Gist: ${e.message}`);
-        this.lastPrint = ''; // retry
-        this.gistBackoffUntil = now + 60_000;
-      });
-      return;
-    }
-
-    const minGap = this.budgetLeft() < DAILY_BUDGET - SLOW_DOWN_AT ? STATUS_SLOW_INTERVAL_MS : STATUS_MIN_INTERVAL_MS;
-    if (!force && now - this.lastStatusAt < minGap) return; // try again on the next tick
-    if (this.budgetLeft() <= ALERT_RESERVE) return;
+    const due = print !== this.lastPrint || now - this.lastStatusAt > GIST_HEARTBEAT_MS;
+    if (!due && !force) return;
+    if (!force && now - this.lastStatusAt < GIST_MIN_INTERVAL_MS) return; // next tick
+    if (now < this.gistBackoffUntil) return;
     this.lastPrint = print;
     this.lastStatusAt = now;
-    this.post(this.cfg.topic, seal(snap, this.cfg.key), {}).catch(() => {});
+    const files = { [github.STATUS_FILE]: snap };
+    if (this.company) files[github.TASKS_FILE] = this.company.snapshot();
+    github.writeFiles(gh.token, gh.gistId, files, this.fetch).catch((e) => {
+      this.log(`Couldn't update the GitHub Gist: ${e.message}`);
+      this.lastPrint = ''; // retry
+      this.gistBackoffUntil = now + 60_000;
+    });
   }
 
   /** Tasks you gave from the phone (Company mode). */
@@ -192,56 +165,6 @@ class Daemon {
       if (inbox?.requests?.length) this.company.handleInbox(inbox.requests);
     } catch (e) {
       this.log(`Couldn't read tasks from your phone: ${e.message}`);
-    }
-  }
-
-  sendTaskAlert({ kind, task }) {
-    const where = this.cfg.showProjectNames ? ` · ${task.project.name}` : '';
-    const title = kind === 'done' ? `Task done${where}` : `Task failed${where}`;
-    const body = this.cfg.showProjectNames ? task.title.slice(0, 200) : 'Open Limitty to see the result.';
-    if (this.budgetLeft() <= 0) return;
-    const q = new URLSearchParams({ title, priority: kind === 'done' ? '3' : '4', tags: kind === 'done' ? 'white_check_mark' : 'x', click: 'limitty://tasks' });
-    this.post(`${alertsTopic(this.cfg)}?${q}`, body, {}).catch(() => {});
-  }
-
-  sendAlert(alert) {
-    if (alert.kind === 'finished' && !this.cfg.alertOnFinish) return;
-    const now = this.now();
-    const dedupe = `${alert.session.key}|${alert.kind}|${alert.session.detail}`;
-    if (now - (this.recentAlerts.get(dedupe) || 0) < 60_000) return;
-    this.recentAlerts.set(dedupe, now);
-    const a = alertText(alert, this.cfg);
-    if (this.budgetLeft() <= 0) return;
-    // Query parameters (rather than headers) keep non-ASCII titles intact.
-    const q = new URLSearchParams({ title: a.title, priority: String(a.priority), tags: a.tags, click: 'limitty://agents' });
-    this.post(`${alertsTopic(this.cfg)}?${q}`, a.body, {}).catch(() => {});
-    // Make sure the phone app's list matches the alert.
-    this.lastStatusAt = 0;
-    setTimeout(() => this.requestStatus(), 1500);
-  }
-
-  budgetLeft() {
-    const day = Math.floor(this.now() / 86_400_000);
-    if (this.budget.day !== day) this.budget = { day, used: 0 };
-    return DAILY_BUDGET - this.budget.used;
-  }
-
-  async post(topic, body, headers) {
-    if (this.now() < this.backoffUntil) return;
-    this.budgetLeft();
-    this.budget.used += 1;
-    const h = { ...headers };
-    if (this.cfg.token) h.Authorization = `Bearer ${this.cfg.token}`;
-    try {
-      const res = await this.fetch(`${this.cfg.server}/${topic}`, { method: 'POST', body, headers: h });
-      if (res.status === 429) {
-        this.backoffUntil = this.now() + 10 * 60_000;
-        this.log('ntfy rate limit reached; pausing for 10 minutes.');
-      } else if (!res.ok) {
-        this.log(`ntfy returned HTTP ${res.status}`);
-      }
-    } catch (e) {
-      this.log(`Couldn't reach ${this.cfg.server}: ${e.message}`);
     }
   }
 }

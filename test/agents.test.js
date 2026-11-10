@@ -9,9 +9,8 @@ const path = require('path');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-agent-'));
 process.env.LIMITTY_HOME = HOME;
 
-const { applyEvent, tick, snapshot, alertText, PENDING_TOOL_MS } = require('../src/agents/state');
+const { applyEvent, tick, snapshot, PENDING_TOOL_MS } = require('../src/agents/state');
 const { deriveFromLines } = require('../src/agents/codex');
-const { seal, open } = require('../src/agents/crypto');
 const hooks = require('../src/agents/hooks');
 const config = require('../src/agents/config');
 const { normalize } = require('../src/agents/cli');
@@ -99,15 +98,7 @@ test('codex: log events drive the session, notify finishes it once', () => {
   assert.deepStrictEqual(r.alerts, ['finished:codex']);
 });
 
-test('crypto: round trip and tamper detection', () => {
-  const key = config.base64url(Buffer.alloc(32, 7));
-  const box = seal({ hi: 'there' }, key);
-  assert.deepStrictEqual(open(box, key), { hi: 'there' });
-  const bad = Buffer.from(box, 'base64'); bad[20] ^= 1;
-  assert.throws(() => open(bad.toString('base64'), key));
-});
-
-test('snapshot sorts attention first and alert text respects privacy', () => {
+test('snapshot sorts attention first', () => {
   const { sessions } = run([
     { t: 1, agent: 'codex', event: 'log', session: 'a', cwd: '/p/one', detail: { state: 'working' } },
     { t: 2, agent: 'claude', event: 'Notification', session: 'b', cwd: '/p/two', detail: { type: 'permission_prompt', message: 'Needs permission to use Edit' } },
@@ -115,9 +106,6 @@ test('snapshot sorts attention first and alert text respects privacy', () => {
   const snap = snapshot(sessions, { host: 'pc', now: 5000 });
   assert.deepStrictEqual(snap.sessions.map((s) => s.state), ['attention', 'working']);
   assert.strictEqual(snap.sessions[0].name, 'Claude Code');
-  const alert = { kind: 'attention', session: sessions['claude:b'] };
-  assert.strictEqual(alertText(alert, { showProjectNames: true }).title, 'Claude Code needs you · two');
-  assert.doesNotMatch(JSON.stringify(alertText(alert, { showProjectNames: false })), /two|Edit/);
 });
 
 test('hooks: install merges with existing settings and uninstall removes only ours', () => {
@@ -185,32 +173,38 @@ test('normalize: maps each agent\'s hook payload', () => {
   assert.deepStrictEqual([x.event, x.session], ['agent-turn-complete', 't1']);
 });
 
-test('daemon: relays encrypted status and plain alerts, within budget', async () => {
-  const cfg = { ...config.DEFAULTS, topic: 'limitty-test', key: config.base64url(Buffer.alloc(32, 1)) };
-  const posts = [];
+test('daemon: status goes only to the Gist: right away when an agent needs you, else at most every 15 s', async () => {
+  const cfg = { github: { token: 'tok', gistId: 'g1', login: 'me' } };
+  const calls = [];
   let now = 1_000_000_000;
-  const d = new Daemon(cfg, { now: () => now, fetchImpl: async (url, init) => { posts.push({ url, ...init }); return { ok: true, status: 200 }; } });
+  const d = new Daemon(cfg, { now: () => now, fetchImpl: async (url, init) => { calls.push({ url, ...init }); return { ok: true, status: 200, json: async () => ({}) }; } });
+  const gist = () => calls.filter((c) => c.url === 'https://api.github.com/gists/g1');
+  const sessionsSent = (i) => JSON.parse(JSON.parse(gist()[i].body).files['limitty-status.json'].content).sessions;
+
+  d.ingest([{ t: now, agent: 'codex', event: 'log', session: 'c', cwd: '/p/api', detail: { state: 'working' } }]);
+  assert.strictEqual(gist().length, 1, 'first change goes out');
+  now += 2000;
+  d.ingest([{ t: now, agent: 'codex', event: 'log', session: 'c2', cwd: '/p/web', detail: { state: 'working' } }]);
+  assert.strictEqual(gist().length, 1, 'a plain change waits for the 15 s gap');
+  now += 1000;
   d.ingest([{ t: now, agent: 'claude', event: 'Notification', session: 's', cwd: '/p/site', detail: { type: 'permission_prompt', message: 'Claude needs your permission to use Bash' } }]);
-  await new Promise((r) => setTimeout(r, 1700));
+  assert.strictEqual(gist().length, 2, 'needs you: sent right away');
+  assert.strictEqual(sessionsSent(1)[0].state, 'attention');
+  assert.ok(!calls.some((c) => !c.url.startsWith('https://api.github.com/')), 'nothing sent anywhere else');
 
-  const alert = posts.find((p) => p.url.includes('-alerts?'));
-  assert.ok(alert, 'alert sent');
-  const q = new URL(alert.url).searchParams;
-  assert.strictEqual(q.get('title'), 'Claude Code needs you · site');
-  assert.strictEqual(q.get('click'), 'limitty://agents');
-  assert.strictEqual(alert.body, 'Claude needs your permission to use Bash');
-  const status = posts.filter((p) => p.url.endsWith('/limitty-test'));
-  assert.strictEqual(status.length, 1, 'one status update');
-  const body = open(status[0].body, cfg.key);
-  assert.strictEqual(body.sessions[0].state, 'attention');
-
-  // No change → nothing new; heartbeat after 30 min.
+  // No change → nothing; heartbeat after 10 min.
+  now += 20_000;
   d.requestStatus();
-  assert.strictEqual(posts.filter((p) => p.url.endsWith('/limitty-test')).length, 1);
-  now += 31 * 60_000;
+  assert.strictEqual(gist().length, 2);
+  now += 11 * 60_000;
   d.requestStatus();
-  assert.strictEqual(posts.filter((p) => p.url.endsWith('/limitty-test')).length, 2);
+  assert.strictEqual(gist().length, 3);
   d.stop();
+
+  // Not linked to a phone: nothing is sent.
+  const offline = new Daemon({}, { fetchImpl: async () => { throw new Error('should not be called'); } });
+  offline.ingest([{ t: 1, agent: 'codex', event: 'log', session: 'x', cwd: '/p', detail: { state: 'working' } }]);
+  offline.stop();
 });
 
 test('hooks: repair rewrites hooks left by an older version, and leaves others alone', () => {

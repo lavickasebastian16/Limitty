@@ -1,9 +1,11 @@
 'use strict';
 
+// ~/.limitty/agent.json: the GitHub link to your iPhone and your Settings, shared by
+// the desktop app, the background agent and the CLI.
+
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const crypto = require('crypto');
 
 const DIR = process.env.LIMITTY_HOME || path.join(os.homedir(), '.limitty');
 const FILES = {
@@ -14,41 +16,17 @@ const FILES = {
   log: path.join(DIR, 'agent.log'),
 };
 
-const DEFAULTS = {
-  server: 'https://ntfy.sh',
-  // Optional ntfy access token (for a self-hosted server or a paid ntfy.sh plan).
-  token: null,
-  // Push "finished" alerts as well as "needs you" alerts.
-  alertOnFinish: true,
-  // Include project folder names in push alerts (alerts are not encrypted).
-  showProjectNames: true,
-};
-
-function base64url(buf) {
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
 function load() {
   try {
-    return { ...DEFAULTS, ...JSON.parse(fs.readFileSync(FILES.config, 'utf8')) };
+    return JSON.parse(fs.readFileSync(FILES.config, 'utf8'));
   } catch {
     return null;
   }
 }
 
-/** Creates the pairing secrets once; later calls return the existing config. */
+/** The config, created empty if there isn't one yet. */
 function ensure() {
-  const existing = load();
-  if (existing) return existing;
-  const cfg = {
-    ...DEFAULTS,
-    // Topic names are public on ntfy.sh, so they're long and random. Status is
-    // also encrypted with `key`, which never leaves your PC and phone.
-    topic: `limitty-${base64url(crypto.randomBytes(15)).replace(/[-_]/g, 'x')}`,
-    key: base64url(crypto.randomBytes(32)),
-  };
-  save(cfg);
-  return cfg;
+  return load() || {};
 }
 
 function save(cfg) {
@@ -56,11 +34,4 @@ function save(cfg) {
   fs.writeFileSync(FILES.config, JSON.stringify(cfg, null, 2), { mode: 0o600 });
 }
 
-const alertsTopic = (cfg) => `${cfg.topic}-alerts`;
-
-function pairingLink(cfg) {
-  const q = new URLSearchParams({ s: cfg.server, t: cfg.topic, k: cfg.key });
-  return `limitty://pair?${q.toString()}`;
-}
-
-module.exports = { FILES, DEFAULTS, load, ensure, save, alertsTopic, pairingLink, base64url };
+module.exports = { FILES, load, ensure, save };

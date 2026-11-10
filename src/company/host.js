@@ -49,9 +49,6 @@ function startHost({ log = () => {} } = {}) {
     company.ceo = c.ceo || 'claude';
     company.workerOptions = c.workers || {};
     require('./workers').isInstalled.clearCache?.();
-    if (host.daemon) {
-      for (const k of ['alertOnFinish', 'showProjectNames']) if (k in c) host.daemon.cfg[k] = c[k];
-    }
     company.changed();
   };
   const onConfig = () => host.applyConfig();

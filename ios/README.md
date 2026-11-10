@@ -78,11 +78,11 @@ Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minut
 
 The **Agents on your PC** section, and the **Limitty Agents** widget, show whether Claude Code, Codex and Antigravity on your PC are working, need you, or are idle. Link them by signing in with the **same GitHub account** on both:
 
-1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…** (or run `npm run agent:setup`), and enter the code on GitHub's page.
+1. **PC:** in the Limitty desktop app, press **Install agents** (or Settings → iPhone → **Link iPhone…**), and approve the code on GitHub's page.
 2. **iPhone:** **Sign in with GitHub**, tap **Copy code & open GitHub**, paste the code and approve it.
 3. **Notifications:** pick a sound for "needs permission" and another for "done". Limitty alerts you while it's open and when iOS wakes it in the background.
 
-While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so rely on the ntfy alerts for "needs you". GitHub sign-in needs a one-time registration; see "Register the GitHub sign-in" in the main README. No GitHub account? **Pair with a QR code instead** still works.
+While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so Limitty's notifications are quicker for "needs you". GitHub sign-in needs a one-time registration; see "Register the GitHub sign-in" in the main README.
 
 ## Tasks for your agents
 

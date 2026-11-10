@@ -4,7 +4,7 @@ const fs = require('fs');
 
 // One-step "connect this PC to your iPhone": sign in with GitHub, find or create
 // the private status Gist, and install the agent hooks. Used by `npm run agent:setup`
-// and by the desktop app's "Connect agents to iPhone…" menu item.
+// and by the desktop app's one-click setup and Settings → iPhone.
 
 const config = require('./config');
 const hooks = require('./hooks');

@@ -99,22 +99,3 @@ test('connect: signs in, saves the account, installs hooks', async () => {
   assert.ok(fs.existsSync(path.join(HOME, '.claude', 'settings.json')));
   assert.ok(fs.existsSync(path.join(HOME, '.gemini', 'config', 'hooks.json')));
 });
-
-test('daemon: status goes to the Gist (with the alerts topic); alerts still go to ntfy', async () => {
-  const cfg = { ...config.DEFAULTS, topic: 'limitty-t', key: config.base64url(Buffer.alloc(32, 2)), github: { token: 'tok', gistId: 'g9', login: 'octo' } };
-  const posts = [];
-  const now = 2_000_000_000;
-  const d = new Daemon(cfg, {
-    now: () => now,
-    fetchImpl: async (url, init) => { posts.push({ url, ...init }); return { ok: true, status: 200, json: async () => ({}) }; },
-  });
-  d.ingest([{ t: now, agent: 'codex', event: 'log', session: 's', cwd: '/x/api', detail: { state: 'working' } }]);
-  await new Promise((r) => setTimeout(r, 50));
-  const patch = posts.find((p) => p.url === 'https://api.github.com/gists/g9');
-  assert.ok(patch, 'gist updated');
-  const content = JSON.parse(JSON.parse(patch.body).files['limitty-status.json'].content);
-  assert.strictEqual(content.sessions[0].state, 'working');
-  assert.strictEqual(content.alertsTopic, 'limitty-t-alerts');
-  assert.ok(!posts.some((p) => p.url === 'https://ntfy.sh/limitty-t'), 'no ntfy status in GitHub mode');
-  d.stop();
-});

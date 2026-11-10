@@ -3,12 +3,12 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleVersion</key>
-	<string>103001</string>
+	<string>103002</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.03.001</string>
+	<string>1.03.002</string>
 	<key>CFBundleDisplayName</key>
 	<string>Limitty</string>
-	<!-- limitty://pair?… (QR code from `npm run agent:setup`) and limitty://agents (alert taps). -->
+	<!-- limitty://agents and limitty://tasks: opened from notifications and the widget. -->
 	<!-- Lets iOS wake Limitty now and then to check on your agents and alert you. -->
 	<key>UIBackgroundModes</key>
 	<array>
@@ -22,7 +22,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>Limitty pairing</string>
+			<string>Limitty</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>limitty</string>

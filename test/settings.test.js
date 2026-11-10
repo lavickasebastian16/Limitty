@@ -18,13 +18,11 @@ test('settings: defaults, then each change is saved to agent.json', () => {
   assert.strictEqual(s.strengths.codex, '');
   assert.match(s.defaultStrengths.codex, /implementation/);
 
-  settings.write({ ceo: 'codex', allowCommands: false, alertOnFinish: false, strengths: { agy: '  UI and CSS ' } });
+  settings.write({ ceo: 'codex', allowCommands: false, strengths: { agy: '  UI and CSS ' } });
   const c = config.load();
   assert.strictEqual(c.ceo, 'codex');
   assert.strictEqual(c.workers.allowCommands, false);
-  assert.strictEqual(c.alertOnFinish, false);
   assert.deepStrictEqual(c.workers.strengths, { agy: 'UI and CSS' });
-  assert.ok(c.topic && c.key, 'pairing secrets created once');
 
   // Empty or default text goes back to the default.
   settings.write({ strengths: { agy: '' } });

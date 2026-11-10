@@ -212,3 +212,44 @@ test('worker commands carry the chosen model', () => {
   assert.ok(!command('agy', 'x', 'work', {}, 'pro').args.includes('--model'), 'no slug configured → no flag');
   assert.deepStrictEqual(command('agy', 'x', 'work', { agyModels: { pro: 'g-pro' } }, 'pro').args.slice(0, 4), ['-p', 'x', '--model', 'g-pro']);
 });
+
+test('Run again on a task that is still running does nothing; a task without its folder fails clearly', async () => {
+  const { c, calls } = company((worker, prompt, mode) => (mode === 'plan' ? 'hang' : { ok: true, text: 'ok' }), { installed: (id) => id === 'claude' });
+  c.limitCache = { at: Date.now(), value: {} };
+  const t = c.create({ title: 'Long job', project: path.basename(PROJECT) });
+  c.tick();
+  await until(() => c.store.get(t.id).status === 'planning');
+  c.retry(t.id);
+  assert.strictEqual(c.store.get(t.id).status, 'planning', 'not restarted');
+  assert.strictEqual(calls.filter((x) => x.mode === 'plan').length, 1, 'no second plan');
+  c.cancel(t.id);
+
+  // A phone request for an unknown project becomes a failed task; Run again must not run it anywhere.
+  c.handleInbox([{ id: 'r1', kind: 'create', title: 'Fix it', project: 'nope' }]);
+  const bad = c.store.tasks.find((x) => x.title === 'Fix it');
+  assert.strictEqual(bad.status, 'failed');
+  c.retry(bad.id);
+  c.tick();
+  assert.strictEqual(c.store.get(bad.id).status, 'failed');
+  assert.match(c.store.get(bad.id).error, /project folder/);
+  assert.strictEqual(calls.filter((x) => x.mode === 'plan').length, 1, 'never planned');
+});
+
+test('Cancel stops the agent and the commands it started', { skip: process.platform === 'win32' }, async () => {
+  const { run } = require('../src/company/workers');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-kill-'));
+  fs.writeFileSync(path.join(dir, 'codex'), `#!/bin/sh\ncat >/dev/null\nsleep 300 &\necho $! > "${dir}/child.pid"\nwait\n`, { mode: 0o755 });
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${savedPath}`;
+  try {
+    const job = run('codex', 'x', { cwd: dir });
+    await until(() => fs.existsSync(path.join(dir, 'child.pid')) && fs.readFileSync(path.join(dir, 'child.pid'), 'utf8').trim());
+    const pid = Number(fs.readFileSync(path.join(dir, 'child.pid'), 'utf8'));
+    job.cancel();
+    assert.strictEqual((await job.promise).text, 'Cancelled.');
+    const running = () => { try { return !/\) Z /.test(fs.readFileSync(`/proc/${pid}/stat`, 'utf8')); } catch { return false; } };
+    await until(() => !running(), 3000);
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});

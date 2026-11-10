@@ -33,8 +33,7 @@ final class AppModel {
     let store = SharedStore.shared
     private let service = LimitsService()
 
-    // Agent status relayed from the PC companion.
-    private(set) var pairing: AgentPairing?
+    // Agent status and tasks from the PC, through your private GitHub Gist.
     private(set) var agentStatus: AgentStatus?
     private(set) var agentError: String?
     private(set) var github: GitHubAccount?
@@ -42,21 +41,16 @@ final class AppModel {
     private(set) var company: CompanyState?
     /// Tasks sent from this phone that the PC hasn't picked up yet.
     private(set) var pendingTasks: [CompanyRequest] = []
-    private let feed = AgentFeed()
     private let githubFeed = GitHubStatusFeed()
 
     /// Notification settings.
     private(set) var phone = PhoneSettings()
 
-    var agentsConnected: Bool { github != nil || pairing != nil }
-    /// ntfy topic/server for push alerts (from the PC's status in GitHub mode, or the QR pairing).
-    var alertsTopic: String? { agentStatus?.alertsTopic ?? pairing?.alertsTopic }
-    var alertsServer: String { agentStatus?.ntfyServer ?? pairing?.server ?? "https://ntfy.sh" }
+    var agentsConnected: Bool { github != nil }
 
     init() {
         signedIn = Set(service.signedIn)
         for s in service.cached() { snapshots[s.provider] = s }
-        pairing = store.agentPairing()
         github = store.githubAccount()
         agentStatus = store.cachedAgentStatus()
         company = store.cachedCompany()
@@ -101,32 +95,26 @@ final class AppModel {
     }
 
     func refreshAgents() async {
+        guard var gh = github else { return }
         do {
-            let status: AgentStatus?
-            if var gh = github {
-                // The PC creates the Gist when it connects; keep looking until it does.
-                if gh.gistId == nil, let id = try await githubFeed.findGist(token: gh.token) {
-                    gh.gistId = id
-                    github = gh
-                    store.setGitHubAccount(gh)
-                }
-                let all = try await githubFeed.fetchAll(gh)
-                status = all.status
-                if let c = all.company, c != company {
-                    deliver(AlertDetector.alerts(from: company, to: c).filter { a in
-                        c.tasks.first { "task-\($0.id)" == a.id }.map { isRecent($0.updatedAt) } ?? false
-                    })
-                    company = c
-                    store.saveCompany(c)
-                }
-                // Drop "sent" placeholders once the PC lists the task (or after 10 minutes).
-                let titles = Set(company?.tasks.map(\.title) ?? [])
-                pendingTasks.removeAll { titles.contains($0.title ?? "") || Date().timeIntervalSince1970 - $0.at > 600 }
-            } else if let pairing {
-                status = try await feed.fetch(pairing)
-            } else {
-                return
+            // The PC creates the Gist when it connects; keep looking until it does.
+            if gh.gistId == nil, let id = try await githubFeed.findGist(token: gh.token) {
+                gh.gistId = id
+                github = gh
+                store.setGitHubAccount(gh)
             }
+            let all = try await githubFeed.fetchAll(gh)
+            let status = all.status
+            if let c = all.company, c != company {
+                deliver(AlertDetector.alerts(from: company, to: c).filter { a in
+                    c.tasks.first { "task-\($0.id)" == a.id }.map { isRecent($0.updatedAt) } ?? false
+                })
+                company = c
+                store.saveCompany(c)
+            }
+            // Drop "sent" placeholders once the PC lists the task (or after 10 minutes).
+            let titles = Set(company?.tasks.map(\.title) ?? [])
+            pendingTasks.removeAll { titles.contains($0.title ?? "") || Date().timeIntervalSince1970 - $0.at > 600 }
             if let status, status != agentStatus {
                 if isRecent(status.sentAt) { deliver(AlertDetector.alerts(from: agentStatus, to: status)) }
                 agentStatus = status
@@ -158,28 +146,12 @@ final class AppModel {
         company = nil
         store.saveCompany(nil)
         agentStatus = nil
-        store.setAgentPairing(pairing) // keeps a QR pairing if there is one; clears cached status otherwise
+        store.saveAgentStatus(nil)
         WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
     }
 
-    func pair(_ p: AgentPairing) {
-        store.setAgentPairing(p)
-        pairing = p
-        agentStatus = nil
-        agentError = nil
-        Task { await refreshAgents() }
-    }
-
-    func unpair() {
-        store.setAgentPairing(nil)
-        pairing = nil
-        agentStatus = nil
-        WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
-    }
-
-    /// limitty://pair?… (from the QR code) or limitty://agents (from an alert).
+    /// limitty://agents or limitty://tasks (from a notification or the widget).
     func handle(_ url: URL) {
-        if url.host == "pair", let p = AgentPairing.parse(url.absoluteString) { pair(p) }
         Task { await refreshAgents() }
     }
 
