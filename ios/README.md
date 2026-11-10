@@ -1,10 +1,8 @@
 # Limitty for iPhone (native app + widgets)
 
-A native SwiftUI app with Home Screen and Lock Screen widgets showing your **Claude** and **Codex** usage limits: a bar per limit window, the percentage used, and when it resets.
+A native SwiftUI app with Home Screen and Lock Screen widgets showing your **Claude**, **Codex** and **Gemini (Antigravity / agy)** usage limits: a bar per limit window, the percentage used, and when it resets.
 
 Download the ready-made `.ipa`, or build it yourself with **[xtool](https://github.com/xtool-org/xtool)** from **Linux or Windows (WSL)**. You don't need a Mac or a paid developer account either way.
-
-> **Antigravity (agy) isn't included.** Its quota only exists on the computer where Antigravity runs, so the phone can't ask for it. Use the desktop widget (`npm start` in the repo root) for agy.
 
 ## Easiest: install the ready-made .ipa
 
@@ -66,9 +64,13 @@ The first time you open the app, iOS will say the developer is untrusted. Go to 
 ## Sign in and add the widget
 
 1. Open **Limitty**, tap **Sign in to Claude**, and sign in on the claude.ai page that opens. Do the same for **Codex** (chatgpt.com).
-   - Use **email sign-in**. Google and Apple sign-in buttons often refuse to work inside apps.
-   - Can't sign in that way? Tap **Paste instead** and paste the cookie from a computer browser. For Claude that's `sessionKey`; for Codex it's `__Secure-next-auth.session-token`, or a Codex `access_token` from `~/.codex/auth.json`.
-2. Long-press your Home Screen, tap **Edit → Add Widget → Limitty**, and pick small, medium or large. Lock Screen widgets (circle, rectangle, inline) are there too.
+   - **Continue with Google** now works in more cases: the in-app browser presents itself as Safari for your iOS version and supports Google's pop-up window. Google sometimes still says *"This browser or app may not be secure"*. If it does, go back and use **Continue with email** with your Gmail address; the sign-in code arrives in that inbox, and it's the same account.
+   - Still stuck? Tap **Paste instead** and paste the cookie from a computer browser. For Claude that's `sessionKey`; for Codex it's `__Secure-next-auth.session-token`, or a Codex `access_token` from `~/.codex/auth.json`.
+2. For **Gemini**, tap **Sign in with Google**. iOS opens its secure Safari sign-in sheet; sign in and allow access. The sheet then shows "Signed in ✓" and closes.
+   - **Read this first:** this signs in *as the Antigravity app*, the same way tools like CodexBar do. Google's terms don't allow that, and some people using Antigravity logins in third-party tools have had accounts suspended. **A spare Google account is safest.**
+   - If the sheet doesn't come back, use **Open sign-in in Safari instead**. Safari will end on a "can't connect to localhost" page. Copy the link from the address bar and paste it into Limitty.
+   - It shows the **Gemini Pro**, **Gemini Flash** and **Claude + GPT** quotas, as in agy's `/usage`. Each pool shows its most-used model.
+3. Long-press your Home Screen, tap **Edit → Add Widget → Limitty**, and pick small, medium or large. Lock Screen widgets (circle, rectangle, inline) are there too.
 
 Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minutes; iOS decides exactly when. Opening the app refreshes right away. When offline, the widget keeps the last numbers for up to a day and shows a ⏱ clock icon.
 
@@ -83,13 +85,15 @@ Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minut
 - The cookies go into an **App Group**, storage shared between the app and its widget. That's how the widget can fetch your limits by itself. xtool registers the App Group automatically.
 - Claude limits come from `claude.ai/api/organizations/{id}/usage`. These are the numbers shown in claude.ai's Settings → Usage.
 - Codex limits come from `chatgpt.com/backend-api/wham/usage`, the same numbers as Codex's `/status`. The phone gets a fresh access token from your ChatGPT login each time.
-- Your logins are only ever sent to claude.ai and chatgpt.com.
+- Gemini limits come from Google's Cloud Code service (`daily-cloudcode-pa.googleapis.com`, `fetchAvailableModels`), the same call Antigravity makes. Sign-in uses Antigravity's Google OAuth client with PKCE. Google's reply is caught by a tiny server Limitty runs on the phone's own `localhost:51121` during sign-in only. The refresh token stays on the phone.
+- Your logins are only ever sent to claude.ai, chatgpt.com and Google.
 
 ## Caveats
 
 - These are the websites' internal endpoints, not public APIs, so Anthropic or OpenAI could change them.
 - claude.ai and chatgpt.com use Cloudflare, which sometimes blocks app requests. If you see "refused the request", sign in again. For Codex you can also paste an access token instead.
 - The saved cookie is a full login to that account. **Sign out** in Limitty, or sign out on the website, to cancel it.
+- To fully cancel Gemini access, also remove "Antigravity" at <https://myaccount.google.com/connections>.
 
 ## Project layout
 

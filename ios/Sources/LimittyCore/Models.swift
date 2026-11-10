@@ -3,6 +3,8 @@ import Foundation
 public enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
+    /// Antigravity / agy quota (Gemini Pro, Gemini Flash, Claude + GPT), via Google sign-in.
+    case gemini
 
     public var id: String { rawValue }
 
@@ -10,14 +12,19 @@ public enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .claude: "Claude"
         case .codex: "Codex"
+        case .gemini: "Gemini"
         }
     }
+
+    /// Gemini signs in with Google OAuth instead of the in-app browser.
+    public var usesGoogleOAuth: Bool { self == .gemini }
 
     /// Page the in-app browser opens so you can sign in.
     public var loginURL: URL {
         switch self {
         case .claude: URL(string: "https://claude.ai/login")!
         case .codex: URL(string: "https://chatgpt.com/auth/login")!
+        case .gemini: URL(string: "https://accounts.google.com")!
         }
     }
 
@@ -26,6 +33,7 @@ public enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .claude: "claude.ai"
         case .codex: "chatgpt.com"
+        case .gemini: "accounts.google.com"
         }
     }
 
@@ -34,6 +42,7 @@ public enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
         switch self {
         case .claude: cookieNames.contains("sessionKey")
         case .codex: cookieNames.contains { $0.hasPrefix("__Secure-next-auth.session-token") }
+        case .gemini: false
         }
     }
 }
@@ -88,12 +97,25 @@ public struct Credential: Codable, Hashable, Sendable {
     public var bearerToken: String?
     public var userAgent: String?
     public var savedAt: Date
+    // Google OAuth (Gemini)
+    public var refreshToken: String?
+    public var accessExpiry: Date?
+    public var projectId: String?
+    public var plan: String?
+    public var email: String?
 
-    public init(cookieHeader: String? = nil, bearerToken: String? = nil, userAgent: String? = nil, savedAt: Date = Date()) {
+    public init(cookieHeader: String? = nil, bearerToken: String? = nil, userAgent: String? = nil, savedAt: Date = Date(),
+                refreshToken: String? = nil, accessExpiry: Date? = nil, projectId: String? = nil,
+                plan: String? = nil, email: String? = nil) {
         self.cookieHeader = cookieHeader
         self.bearerToken = bearerToken
         self.userAgent = userAgent
         self.savedAt = savedAt
+        self.refreshToken = refreshToken
+        self.accessExpiry = accessExpiry
+        self.projectId = projectId
+        self.plan = plan
+        self.email = email
     }
 
     /// Accepts anything a user might paste: a bare cookie value, a full
@@ -112,6 +134,8 @@ public struct Credential: Codable, Hashable, Sendable {
             let parts = v.split(separator: ".", omittingEmptySubsequences: false).count
             if parts == 3, v.hasPrefix("eyJ") { return Credential(bearerToken: v) }
             if parts == 5 { return Credential(cookieHeader: "__Secure-next-auth.session-token=\(v)") }
+            return nil
+        case .gemini:
             return nil
         }
     }

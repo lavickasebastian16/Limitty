@@ -2,7 +2,7 @@
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window.
 
-## 📱 iPhone app + widgets (Claude + Codex)
+## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
 A native SwiftUI app with Home Screen and Lock Screen widgets. You build and install it with [xtool](https://github.com/xtool-org/xtool) from Linux or Windows (WSL); you don't need a Mac.
 Guide: **[ios/README.md](ios/README.md)**.

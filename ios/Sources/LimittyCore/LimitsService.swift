@@ -6,11 +6,13 @@ public struct LimitsService: Sendable {
     let store: SharedStore
     let claude: ClaudeClient
     let codex: CodexClient
+    let gemini: GeminiClient
 
     public init(store: SharedStore = .shared, http: HTTPClient = URLSessionHTTPClient()) {
         self.store = store
         self.claude = ClaudeClient(http: http)
         self.codex = CodexClient(http: http)
+        self.gemini = GeminiClient(http: http)
     }
 
     /// Providers you've signed in to, in display order.
@@ -30,9 +32,15 @@ public struct LimitsService: Sendable {
             return ProviderSnapshot(provider: p, error: LimitError.notSignedIn.message, hint: LimitError.notSignedIn.hint, fetchedAt: now)
         }
         do {
-            let result = switch p {
-            case .claude: try await claude.fetch(cred)
-            case .codex: try await codex.fetch(cred, now: now)
+            let result: (plan: String?, windows: [LimitWindow])
+            switch p {
+            case .claude: result = try await claude.fetch(cred)
+            case .codex: result = try await codex.fetch(cred, now: now)
+            case .gemini:
+                let r = try await gemini.fetch(cred, now: now)
+                // Keep the refreshed Google token so the app and widget share it.
+                if let updated = r.updated { store.setCredential(updated, for: .gemini) }
+                result = (r.plan, r.windows)
             }
             let snap = ProviderSnapshot(provider: p, plan: result.plan, windows: result.windows, fetchedAt: now)
             store.saveSnapshot(snap)
@@ -72,6 +80,11 @@ public enum SampleData {
             ProviderSnapshot(provider: .codex, plan: "Plus", windows: [
                 LimitWindow(id: "primary", label: "Session", usedPercent: 91, resetsAt: now.addingTimeInterval(0.4 * 3600)),
                 LimitWindow(id: "secondary", label: "Weekly", usedPercent: 38, resetsAt: now.addingTimeInterval(5 * 86_400)),
+            ], fetchedAt: now),
+            ProviderSnapshot(provider: .gemini, plan: "Google AI Pro", windows: [
+                LimitWindow(id: "gemini_pro", label: "Gemini Pro", usedPercent: 15, resetsAt: now.addingTimeInterval(3 * 3600)),
+                LimitWindow(id: "gemini_flash", label: "Gemini Flash", usedPercent: 4, resetsAt: now.addingTimeInterval(3 * 3600)),
+                LimitWindow(id: "claude_gpt", label: "Claude + GPT", usedPercent: 48, resetsAt: now.addingTimeInterval(3 * 3600)),
             ], fetchedAt: now),
         ]
     }

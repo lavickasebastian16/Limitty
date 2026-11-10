@@ -22,7 +22,7 @@ struct LoginView: View {
             }
             .ignoresSafeArea(edges: .bottom)
             .safeAreaInset(edge: .top) {
-                Text("Sign in with your email. Google and Apple buttons may not work inside apps.")
+                Text("If Google says this browser isn't secure, go back and use “Continue with email” (the code goes to the same Gmail), or tap Paste instead.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -58,6 +58,10 @@ struct LoginView: View {
     }
 }
 
+/// Safari's user agent for the iOS version this iPhone runs.
+@MainActor
+var deviceSafariUserAgent: String { safariUserAgent(iOSVersion: UIDevice.current.systemVersion) }
+
 struct WebLogin: UIViewRepresentable {
     let provider: Provider
     let onSignedIn: (Credential) -> Void
@@ -67,9 +71,12 @@ struct WebLogin: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
+        // "Continue with Google" opens a pop-up window on some sites.
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
         let webView = WKWebView(frame: .zero, configuration: config)
-        // Look like Safari so sign-in pages behave normally.
-        webView.customUserAgent = defaultUserAgent
+        // Look exactly like Safari on this iPhone so sign-in pages (Google's especially) behave normally.
+        webView.customUserAgent = deviceSafariUserAgent
+        webView.uiDelegate = context.coordinator
         context.coordinator.start(webView)
         return webView
     }
@@ -79,15 +86,34 @@ struct WebLogin: UIViewRepresentable {
     static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) { coordinator.stop() }
 
     @MainActor
-    final class Coordinator {
+    final class Coordinator: NSObject, WKUIDelegate {
         let provider: Provider
         let onSignedIn: (Credential) -> Void
         private var timer: Timer?
         private var done = false
+        private var popups: [WKWebView] = []
 
         init(provider: Provider, onSignedIn: @escaping (Credential) -> Void) {
             self.provider = provider
             self.onSignedIn = onSignedIn
+        }
+
+        // Show pop-up windows (e.g. Google sign-in) on top of the page. They must use the
+        // configuration WebKit hands us so the pop-up can report back to the page.
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            let popup = WKWebView(frame: webView.bounds, configuration: configuration)
+            popup.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            popup.customUserAgent = webView.customUserAgent
+            popup.uiDelegate = self
+            webView.addSubview(popup)
+            popups.append(popup)
+            return popup
+        }
+
+        func webViewDidClose(_ webView: WKWebView) {
+            guard let i = popups.firstIndex(of: webView) else { return }
+            popups.remove(at: i).removeFromSuperview()
         }
 
         func start(_ webView: WKWebView) {
@@ -117,6 +143,8 @@ struct WebLogin: UIViewRepresentable {
             done = true
             stop()
             let header = cookies.map { "\($0.name)=\($0.value)" }.joined(separator: "; ")
+            popups.forEach { $0.removeFromSuperview() }
+            popups.removeAll()
             onSignedIn(Credential(cookieHeader: header, userAgent: webView.customUserAgent ?? defaultUserAgent))
         }
     }

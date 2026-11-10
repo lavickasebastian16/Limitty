@@ -17,7 +17,7 @@ struct LimitsWidget: Widget {
                 .containerBackground(.fill.tertiary, for: .widget)
         }
         .configurationDisplayName("Limitty")
-        .description("Your Claude and Codex usage limits.")
+        .description("Your Claude, Codex and Gemini usage limits.")
         .supportedFamilies([
             .systemSmall, .systemMedium, .systemLarge,
             .accessoryCircular, .accessoryRectangular, .accessoryInline,
@@ -78,13 +78,22 @@ struct LimitsWidgetView: View {
 
     // MARK: Home Screen
 
+    /// How many limit rows fit per service, given how many services are shown.
+    private var rowsPerService: Int {
+        switch entry.snapshots.count {
+        case 1: 3
+        case 2: 2
+        default: 1
+        }
+    }
+
     private var small: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: entry.snapshots.count > 2 ? 5 : 8) {
             ForEach(entry.snapshots) { snap in
                 VStack(alignment: .leading, spacing: 3) {
                     ProviderHeader(snap, showPlan: false)
                     if snap.ok {
-                        ForEach(snap.windows.prefix(entry.snapshots.count > 1 ? 2 : 3)) { WindowRow($0, showReset: false, compact: true) }
+                        ForEach(snap.windows.prefix(rowsPerService)) { WindowRow($0, showReset: false, compact: true) }
                     } else {
                         Text(snap.error ?? "").font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                     }
@@ -95,12 +104,12 @@ struct LimitsWidgetView: View {
     }
 
     private var medium: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: entry.snapshots.count > 2 ? 10 : 14) {
             ForEach(entry.snapshots) { snap in
                 VStack(alignment: .leading, spacing: 5) {
-                    ProviderHeader(snap)
+                    ProviderHeader(snap, showPlan: entry.snapshots.count < 3)
                     if snap.ok {
-                        ForEach(snap.windows.prefix(3)) { WindowRow($0, compact: true) }
+                        ForEach(snap.windows.prefix(3)) { WindowRow($0, showReset: entry.snapshots.count < 3, compact: true) }
                     } else {
                         ErrorLine(snap)
                     }
@@ -157,7 +166,7 @@ struct LimitsWidgetView: View {
                     Text(snap.ok ? snap.windows.prefix(2).map { "\(Int($0.usedPercent.rounded()))%" }.joined(separator: " · ") : "–")
                         .font(.caption).monospacedDigit()
                 }
-                if snap.ok, let first = snap.windows.first {
+                if snap.ok, entry.snapshots.count < 3, let first = snap.windows.first {
                     Gauge(value: first.usedPercent / 100) { EmptyView() }
                         .gaugeStyle(.accessoryLinearCapacity)
                 }

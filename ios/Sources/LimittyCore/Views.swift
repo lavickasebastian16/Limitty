@@ -8,6 +8,7 @@ public extension Provider {
         switch self {
         case .claude: Color(red: 0.85, green: 0.47, blue: 0.34)
         case .codex: Color.primary
+        case .gemini: Color(red: 0.31, green: 0.55, blue: 1.0)
         }
     }
 }

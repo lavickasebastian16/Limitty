@@ -26,13 +26,18 @@ struct ContentView: View {
                             Button {
                                 loginFor = provider
                             } label: {
-                                Label("Sign in to \(provider.displayName)", systemImage: "person.crop.circle.badge.plus")
+                                Label(provider.usesGoogleOAuth ? "Sign in with Google" : "Sign in to \(provider.displayName)",
+                                      systemImage: "person.crop.circle.badge.plus")
                             }
                         }
                     } header: {
                         HStack(spacing: 6) {
                             Circle().fill(provider.color).frame(width: 8, height: 8)
-                            Text(provider.displayName)
+                            Text(provider.usesGoogleOAuth ? "Gemini · Antigravity" : provider.displayName)
+                        }
+                    } footer: {
+                        if provider.usesGoogleOAuth {
+                            Text(model.store.credential(for: provider)?.email.map { "Signed in as \($0)." } ?? "Gemini Pro, Gemini Flash and Claude + GPT quotas, as in agy's /usage.")
                         }
                     }
                 }
@@ -56,8 +61,12 @@ struct ContentView: View {
             }
             .refreshable { await model.refresh() }
             .sheet(item: $loginFor) { provider in
-                LoginView(provider: provider) { credential in
-                    model.save(credential, for: provider)
+                if provider.usesGoogleOAuth {
+                    GoogleLoginView { credential in model.save(credential, for: provider) }
+                } else {
+                    LoginView(provider: provider) { credential in
+                        model.save(credential, for: provider)
+                    }
                 }
             }
             .task { await model.refresh() }

@@ -4,12 +4,12 @@ import XCTest
 
 final class FakeHTTP: HTTPClient, @unchecked Sendable {
     var routes: [String: (Int, String)]
-    var calls: [(url: String, headers: [String: String])] = []
+    var calls: [(url: String, headers: [String: String], body: String)] = []
     init(_ routes: [String: (Int, String)]) { self.routes = routes }
 
-    func get(_ url: URL, headers: [String: String]) async throws -> (status: Int, body: Data) {
-        calls.append((url.absoluteString, headers))
-        guard let (status, body) = routes[url.absoluteString] else { throw URLError(.notConnectedToInternet) }
+    func send(_ r: HTTPRequest) async throws -> (status: Int, body: Data) {
+        calls.append((r.url.absoluteString, r.headers, r.body.map { String(decoding: $0, as: UTF8.self) } ?? ""))
+        guard let (status, body) = routes[r.url.absoluteString] else { throw URLError(.notConnectedToInternet) }
         return (status, Data(body.utf8))
     }
 }
@@ -157,5 +157,101 @@ final class ServiceTests: XCTestCase {
         let svc = LimitsService(store: tempStore(), http: FakeHTTP([:]))
         let snaps = await svc.refreshAll()
         XCTAssertTrue(snaps.isEmpty)
+    }
+}
+
+let modelsJSON = #"""
+{"models":{
+  "gemini-3-pro-high":{"displayName":"Gemini 3 Pro (High)","quotaInfo":{"remainingFraction":0.8,"resetTime":"2026-11-10T15:00:00Z"}},
+  "gemini-3-pro-low":{"displayName":"Gemini 3 Pro (Low)","quotaInfo":{"remainingFraction":0.6,"resetTime":"2026-11-10T16:00:00Z"}},
+  "gemini-3-flash":{"displayName":"Gemini 3 Flash","quotaInfo":{"remainingFraction":1}},
+  "claude-sonnet-4-5":{"displayName":"Claude Sonnet 4.5","quotaInfo":{"resetTime":"2026-11-10T17:00:00Z"}},
+  "gpt-oss-120b":{"displayName":"GPT-OSS 120B","quotaInfo":{"remainingFraction":0.5}},
+  "gemini-2.5-pro-old":{"displayName":"Old","quotaInfo":{"remainingFraction":0.0}},
+  "chat_20706":{"quotaInfo":{"remainingFraction":0.1}},
+  "gemini-disabled":{"disabled":true,"quotaInfo":{"remainingFraction":0}}
+ },
+ "agentModelSorts":[{"groups":[{"modelIds":["gemini-3-pro-high","gemini-3-pro-low","gemini-3-flash","claude-sonnet-4-5","gpt-oss-120b","gemini-disabled"]}]}]
+}
+"""#
+
+final class GeminiTests: XCTestCase {
+    func testGroupsModelsIntoQuotaPools() {
+        let w = GeminiParser.windows(from: Data(modelsJSON.utf8))
+        XCTAssertEqual(w.map(\.label), ["Gemini Pro", "Gemini Flash", "Claude + GPT"])
+        XCTAssertEqual(w.map { $0.usedPercent.rounded() }, [40, 0, 100]) // most-used model in each pool; missing fraction = empty
+        XCTAssertEqual(w[0].resetsAt, JSON.date("2026-11-10T16:00:00Z"))
+    }
+
+    func testProjectAndPlan() {
+        let p = GeminiParser.project(from: Data(#"{"cloudaicompanionProject":{"id":"proj-1"},"currentTier":{"name":"Free"},"paidTier":{"name":"Google AI Pro"}}"#.utf8))
+        XCTAssertEqual(p.id, "proj-1")
+        XCTAssertEqual(p.plan, "Google AI Pro")
+    }
+
+    func testAuthorizationURLAndCallback() throws {
+        let url = GoogleOAuth.authorizationURL(codeChallenge: "chal", state: "st")
+        let q = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+        XCTAssertEqual(q.first { $0.name == "redirect_uri" }?.value, "http://localhost:51121/oauth-callback")
+        XCTAssertEqual(q.first { $0.name == "code_challenge_method" }?.value, "S256")
+        XCTAssertEqual(q.first { $0.name == "access_type" }?.value, "offline")
+
+        let cb = URL(string: "http://localhost:51121/oauth-callback?state=st&code=4%2Fabc&scope=x")!
+        XCTAssertEqual(try GoogleOAuth.code(fromCallback: cb, expectedState: "st"), "4/abc")
+        XCTAssertThrowsError(try GoogleOAuth.code(fromCallback: cb, expectedState: "other"))
+        XCTAssertThrowsError(try GoogleOAuth.code(fromCallback: URL(string: "http://localhost:51121/oauth-callback?error=access_denied&state=st")!, expectedState: "st"))
+    }
+
+    func testExchangeCode() async throws {
+        let http = FakeHTTP([
+            "https://oauth2.googleapis.com/token": (200, #"{"access_token":"at","refresh_token":"rt","expires_in":3599}"#),
+            "https://www.googleapis.com/oauth2/v1/userinfo?alt=json": (200, #"{"email":"me@example.com"}"#),
+        ])
+        let now = Date(timeIntervalSince1970: 1000)
+        let c = try await GoogleOAuth.exchange(code: "4/abc", verifier: "ver", http: http, now: now)
+        XCTAssertEqual(c.bearerToken, "at")
+        XCTAssertEqual(c.refreshToken, "rt")
+        XCTAssertEqual(c.email, "me@example.com")
+        XCTAssertEqual(c.accessExpiry, now.addingTimeInterval(3599))
+        XCTAssertTrue(http.calls[0].body.contains("code=4%2Fabc"))
+        XCTAssertTrue(http.calls[0].body.contains("code_verifier=ver"))
+        XCTAssertTrue(http.calls[0].body.contains("redirect_uri=http%3A%2F%2Flocalhost%3A51121%2Foauth-callback"))
+    }
+
+    func testRefreshesTokenFindsProjectAndSavesCredential() async {
+        let store = tempStore()
+        store.setCredential(Credential(bearerToken: "old", refreshToken: "rt", accessExpiry: Date(timeIntervalSince1970: 0)), for: .gemini)
+        let http = FakeHTTP([
+            "https://oauth2.googleapis.com/token": (200, #"{"access_token":"fresh","expires_in":3600}"#),
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:loadCodeAssist": (200, #"{"cloudaicompanionProject":"proj-9","currentTier":{"name":"Google AI Pro"}}"#),
+            "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels": (200, modelsJSON),
+        ])
+        let snap = await LimitsService(store: store, http: http).refresh(.gemini)
+        XCTAssertTrue(snap.ok, snap.error ?? "")
+        XCTAssertEqual(snap.plan, "Google AI Pro")
+        XCTAssertEqual(snap.windows.first?.label, "Gemini Pro")
+
+        let saved = store.credential(for: .gemini)
+        XCTAssertEqual(saved?.bearerToken, "fresh")
+        XCTAssertEqual(saved?.projectId, "proj-9")
+        XCTAssertEqual(saved?.refreshToken, "rt")
+        let models = http.calls.first { $0.url.hasSuffix("fetchAvailableModels") }!
+        XCTAssertEqual(models.headers["Authorization"], "Bearer fresh")
+        XCTAssertEqual(models.body, #"{"project":"proj-9"}"#)
+        XCTAssertTrue(models.headers["User-Agent"]!.hasPrefix("antigravity/"))
+    }
+
+    func testRevokedGoogleAccessAsksToSignInAgain() async {
+        let store = tempStore()
+        store.setCredential(Credential(refreshToken: "rt"), for: .gemini)
+        let http = FakeHTTP(["https://oauth2.googleapis.com/token": (400, #"{"error":"invalid_grant"}"#)])
+        let snap = await LimitsService(store: store, http: http).refresh(.gemini)
+        XCTAssertEqual(snap.error, "Login expired")
+    }
+
+    func testSafariUserAgent() {
+        XCTAssertEqual(safariUserAgent(iOSVersion: "18.1.1"),
+                       "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1")
+        XCTAssertTrue(safariUserAgent(iOSVersion: "26").contains("Version/26.0 "))
     }
 }

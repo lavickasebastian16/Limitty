@@ -3,24 +3,59 @@ import Foundation
 import FoundationNetworking
 #endif
 
+public struct HTTPRequest: Sendable {
+    public var method: String
+    public var url: URL
+    public var headers: [String: String]
+    public var body: Data?
+
+    public init(method: String = "GET", url: URL, headers: [String: String] = [:], body: Data? = nil) {
+        self.method = method
+        self.url = url
+        self.headers = headers
+        self.body = body
+    }
+}
+
 public protocol HTTPClient: Sendable {
-    func get(_ url: URL, headers: [String: String]) async throws -> (status: Int, body: Data)
+    func send(_ request: HTTPRequest) async throws -> (status: Int, body: Data)
+}
+
+public extension HTTPClient {
+    func get(_ url: URL, headers: [String: String]) async throws -> (status: Int, body: Data) {
+        try await send(HTTPRequest(url: url, headers: headers))
+    }
+
+    func post(_ url: URL, headers: [String: String], body: Data) async throws -> (status: Int, body: Data) {
+        try await send(HTTPRequest(method: "POST", url: url, headers: headers, body: body))
+    }
 }
 
 public struct URLSessionHTTPClient: HTTPClient {
     public init() {}
 
-    public func get(_ url: URL, headers: [String: String]) async throws -> (status: Int, body: Data) {
-        var req = URLRequest(url: url, timeoutInterval: 20)
+    public func send(_ r: HTTPRequest) async throws -> (status: Int, body: Data) {
+        var req = URLRequest(url: r.url, timeoutInterval: 20)
+        req.httpMethod = r.method
+        req.httpBody = r.body
         req.httpShouldHandleCookies = false // we send the saved cookie header ourselves
-        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
+        for (k, v) in r.headers { req.setValue(v, forHTTPHeaderField: k) }
         let (data, resp) = try await URLSession.shared.data(for: req)
         return ((resp as? HTTPURLResponse)?.statusCode ?? 0, data)
     }
 }
 
 /// Mobile Safari user agent, used when no browser UA was saved at sign-in.
-public let defaultUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
+public let defaultUserAgent = safariUserAgent(iOSVersion: "18.0")
+
+/// The exact user agent Safari sends on this iOS version. Sign-in pages (Google's
+/// especially) are less likely to block the in-app browser when it matches.
+public func safariUserAgent(iOSVersion: String) -> String {
+    let parts = iOSVersion.split(separator: ".").map(String.init)
+    let os = parts.joined(separator: "_")
+    let short = parts.prefix(2).joined(separator: ".") + (parts.count == 1 ? ".0" : "")
+    return "Mozilla/5.0 (iPhone; CPU iPhone OS \(os) like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/\(short) Mobile/15E148 Safari/604.1"
+}
 
 func browserHeaders(_ c: Credential) -> [String: String] {
     var h = ["Accept": "application/json", "User-Agent": c.userAgent ?? defaultUserAgent]
