@@ -24,6 +24,7 @@ window.limitty.onUpdate((r) => {
 $('refresh').addEventListener('click', () => window.limitty.refresh());
 $('hide').addEventListener('click', () => window.limitty.hide());
 $('menu').addEventListener('click', () => window.limitty.menu());
+$('company').addEventListener('click', () => window.limitty.company());
 
 // Keep the "resets in" countdowns fresh between fetches.
 setInterval(() => { if (results.length) paint(); }, 30000);

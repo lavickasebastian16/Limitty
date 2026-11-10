@@ -378,3 +378,39 @@ final class GitHubTests: XCTestCase {
 }
 
 final class Box: @unchecked Sendable { var values: [Double] = [] }
+
+final class CompanyTests: XCTestCase {
+    let tasksJSON = #"{"v":1,"projects":[{"name":"my-website"}],"workers":{"claude":{"name":"Claude Code","available":true,"busy":false,"remaining":40},"codex":{"name":"Codex","available":true,"busy":true,"remaining":null},"agy":{"name":"Antigravity","available":false,"busy":false,"remaining":null}},"tasks":[{"id":"t1","title":"Add dark mode","project":"my-website","worker":"auto","source":"phone","status":"running","error":null,"createdAt":1794310000,"updatedAt":1794310050,"plan":{"summary":"Codex builds it","by":"claude","steps":[{"worker":"codex","title":"Build","status":"running","output":"","startedAt":1794310040,"finishedAt":null}]}}]}"#
+
+    func testReadsStatusAndTasksInOneRequest() async throws {
+        let escaped = tasksJSON.replacingOccurrences(of: "\"", with: "\\\"")
+        let http = FakeHTTP(["https://api.github.com/gists/g1": (200, #"{"files":{"limitty-tasks.json":{"content":"\#(escaped)"}}}"#)])
+        let r = try await GitHubStatusFeed(http: http).fetchAll(GitHubAccount(token: "t", login: "o", gistId: "g1"))
+        XCTAssertNil(r.status)
+        XCTAssertEqual(r.company?.projects.map(\.name), ["my-website"])
+        XCTAssertEqual(r.company?.workers["codex"]?.busy, true)
+        XCTAssertNil(r.company?.workers["codex"]?.remaining)
+        let t = try XCTUnwrap(r.company?.tasks.first)
+        XCTAssertEqual(t.statusLabel, "Working")
+        XCTAssertTrue(t.isActive)
+        XCTAssertEqual(t.plan?.steps.first?.worker, "codex")
+        XCTAssertEqual(http.calls.count, 1)
+    }
+
+    func testSendAppendsToTheInbox() async throws {
+        let existing = #"{\"requests\":[{\"id\":\"old\",\"kind\":\"cancel\",\"task\":\"x\",\"at\":1}]}"#
+        let http = FakeHTTP([
+            "https://api.github.com/gists/g1": (200, #"{"files":{"limitty-inbox.json":{"content":"\#(existing)"}}}"#),
+        ])
+        try await GitHubStatusFeed(http: http).send(.create(title: "Fix login", project: "api", worker: "auto"),
+                                                    account: GitHubAccount(token: "t", login: "o", gistId: "g1"))
+        let patch = try XCTUnwrap(http.calls.last)
+        XCTAssertEqual(http.calls.count, 2)
+        let body = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(patch.body.utf8)) as? [String: Any])
+        let content = (((body["files"] as? [String: Any])?["limitty-inbox.json"] as? [String: Any])?["content"] as? String) ?? ""
+        let inbox = try JSONDecoder().decode(CompanyInbox.self, from: Data(content.utf8))
+        XCTAssertEqual(inbox.requests.map(\.kind), ["cancel", "create"])
+        XCTAssertEqual(inbox.requests.last?.title, "Fix login")
+        XCTAssertEqual(inbox.requests.last?.project, "api")
+    }
+}

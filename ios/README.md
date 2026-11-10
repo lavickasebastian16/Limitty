@@ -84,6 +84,10 @@ The **Agents on your PC** section, and the **Limitty Agents** widget, show wheth
 
 While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so rely on the ntfy alerts for "needs you". GitHub sign-in needs a one-time registration; see "Register the GitHub sign-in" in the main README. No GitHub account? **Pair with a QR code instead** still works.
 
+## Tasks for your agents
+
+Under **Tasks**, tap **New task**, describe the work, and pick a project. The CEO on your PC plans it and hands it to Claude Code, Codex or Antigravity. Tap a task to see the plan, each worker's output, and **Cancel** or **Run again**. This needs GitHub sign-in and a connected PC; see "Company" in the main README.
+
 ## Free Apple ID limits
 
 - **The app stops opening after 7 days.** Plug in and run `xtool dev` again to renew it. Your logins are kept.

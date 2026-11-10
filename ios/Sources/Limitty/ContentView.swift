@@ -9,10 +9,12 @@ struct ContentView: View {
     @State private var showPair = false
     @State private var showAlerts = false
     @State private var showGitHub = false
+    @State private var showNewTask = false
 
     var body: some View {
         NavigationStack {
             List {
+                TasksSection(showNewTask: $showNewTask, showGitHub: $showGitHub)
                 AgentsSection(showPair: $showPair, showAlerts: $showAlerts, showGitHub: $showGitHub)
 
                 if !model.store.isShared {
@@ -87,6 +89,7 @@ struct ContentView: View {
             .sheet(isPresented: $showPair) { PairView() }
             .sheet(isPresented: $showAlerts) { AlertsSetupView() }
             .sheet(isPresented: $showGitHub) { GitHubLoginView() }
+            .sheet(isPresented: $showNewTask) { NewTaskView() }
             .task { await model.refresh() }
             .task(id: scenePhase) {
                 // Keep agent status fresh while the app is open.

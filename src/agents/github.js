@@ -103,9 +103,24 @@ async function findOrCreateGist(token, fetchImpl) {
 }
 
 async function writeStatus(token, gistId, status, fetchImpl) {
-  await api(token, fetchImpl)('PATCH', `/gists/${gistId}`, {
-    files: { [STATUS_FILE]: { content: JSON.stringify(status) } },
-  });
+  await writeFiles(token, gistId, { [STATUS_FILE]: status }, fetchImpl);
 }
 
-module.exports = { CLIENT_ID, STATUS_FILE, deviceLogin, whoami, findOrCreateGist, writeStatus, GitHubError };
+/** Writes several JSON files to the Gist in one request. */
+async function writeFiles(token, gistId, files, fetchImpl) {
+  const body = { files: Object.fromEntries(Object.entries(files).map(([name, obj]) => [name, { content: JSON.stringify(obj) }])) };
+  await api(token, fetchImpl)('PATCH', `/gists/${gistId}`, body);
+}
+
+/** Reads a JSON file from the Gist (null if it isn't there). */
+async function readFile(token, gistId, name, fetchImpl) {
+  const gist = await api(token, fetchImpl)('GET', `/gists/${gistId}`);
+  const f = gist.files?.[name];
+  if (!f?.content) return null;
+  try { return JSON.parse(f.content); } catch { return null; }
+}
+
+const TASKS_FILE = 'limitty-tasks.json'; // written by the PC
+const INBOX_FILE = 'limitty-inbox.json'; // written by the phone
+
+module.exports = { CLIENT_ID, STATUS_FILE, TASKS_FILE, INBOX_FILE, deviceLogin, whoami, findOrCreateGist, writeStatus, writeFiles, readFile, GitHubError };

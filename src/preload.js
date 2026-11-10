@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('limitty', {
   resize: (height) => ipcRenderer.send('window:resize', height),
   hide: () => ipcRenderer.send('window:hide'),
   menu: () => ipcRenderer.send('window:menu'),
+  company: () => ipcRenderer.send('window:company'),
 });

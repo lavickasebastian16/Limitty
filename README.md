@@ -21,6 +21,25 @@ Status is stored in a **private Gist** on your GitHub account. Limitty only asks
 
 > **One-time setup for this repo:** GitHub sign-in needs a free "OAuth app" so Limitty has a sign-in ID. See [Register the GitHub sign-in](#register-the-github-sign-in-one-time).
 
+## 🏢 Company: give tasks to your agents
+
+Run your agents like a small company:
+- **You** give a task, from the iPhone (**Tasks → New task**), the desktop app (the briefcase button → **Company** window), or a terminal (`node src/agents/cli.js task "…" --in <folder>`).
+- **The CEO** (Claude Code by default) reads the task. It splits the task into up to 4 steps if useful, and hands each step to the best worker. It prefers whoever has the most usage limit left, using Limitty's own limit readings.
+- **The workers** (Claude Code, Codex, Antigravity) carry out the steps in order, in your project folder. Each step sees the results of the earlier ones.
+- You follow progress, the CEO's plan, and each worker's output on the phone or PC. You get a push alert when a task is done or fails, and you can cancel or rerun any task.
+
+Details:
+- **Workers edit your project directly.** They can change files and run commands there:
+  - Claude runs with `--permission-mode acceptEdits` and shell commands allowed.
+  - Codex runs with `--full-auto` (its workspace sandbox).
+  - agy runs with `-p`.
+  - Use git so you can review or undo their changes.
+- **Projects:** add folders with **Add folder…** in the Company window. Folders your agents worked in recently show up too.
+- **Which process runs it:** the desktop app or the background agent (`npm run agent`), whichever starts first; the other just shows the tasks. Tasks from the phone go through the same private GitHub Gist as agent status, so they need GitHub sign-in.
+- **CEO choice:** set `"ceo": "codex"`, `"agy"` or `"rules"` in `~/.limitty/agent.json`. `"rules"` uses no AI: it picks the free worker with the most limit left. To stop Claude workers from running shell commands, set `"workers": { "allowCommands": false }`.
+- **Limits:** a task that's running when Limitty or the PC stops is marked as interrupted; use **Run again**. Each step stops after 45 minutes.
+
 ## 🖥️ Desktop widget (Claude + Codex + agy)
 
 A small always-on-top window for Windows, macOS and Linux. It reads the logins your CLIs already store on the computer. Antigravity only works here, because its quota lives on the computer that runs it.

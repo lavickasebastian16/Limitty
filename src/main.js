@@ -18,7 +18,8 @@ let tray = null;
 let timer = null;
 let lastResults = [];
 let config = { ...DEFAULTS };
-let agentDaemon = null;
+let host = null; // runs the Company + phone relay (or { owner: false } if another process does)
+let companyWin = null;
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
@@ -129,6 +130,7 @@ function buildTrayMenu() {
     },
     { label: 'Reset position', click: () => { config.x = null; config.y = null; saveConfig(); placeDefault(); } },
     { type: 'separator' },
+    { label: 'Company: tasks for your agents…', click: openCompany },
     agentsMenuItem(),
     { type: 'separator' },
     { label: 'Quit Limitty', click: () => app.quit() },
@@ -141,18 +143,14 @@ function agentConfig() {
   try { return require('./agents/config').load(); } catch { return null; }
 }
 
-/** Runs the agent relay while the widget is open (quietly skips if another copy runs). */
-function startAgentRelay() {
-  agentDaemon?.stop();
-  agentDaemon = null;
-  const cfg = agentConfig();
-  if (!cfg) return;
+/** Runs the Company and the phone relay, unless the background agent already does. */
+function startHost() {
   try {
-    const { Daemon } = require('./agents/daemon');
-    agentDaemon = new Daemon(cfg, { log: (m) => console.log(`[agent] ${m}`) });
-    if (!agentDaemon.start()) agentDaemon = null;
+    host = require('./company/host').startHost({ log: (m) => console.log(`[agent] ${m}`) });
+    host.company?.on('change', pushCompanyState);
   } catch (e) {
     console.error('[agent]', e.message);
+    host = { owner: false };
   }
 }
 
@@ -163,7 +161,7 @@ function agentsMenuItem() {
       label: `Agents → iPhone: @${gh.login}`,
       submenu: [
         { label: 'Reinstall agent hooks', click: () => { require('./agents/connect').installHooks(); dialog.showMessageBox({ message: 'Agent hooks reinstalled. Restart open agent sessions to pick them up.' }); } },
-        { label: 'Disconnect', click: () => { require('./agents/connect').disconnect(); agentDaemon?.stop(); agentDaemon = null; updateTray(); } },
+        { label: 'Disconnect', click: () => { require('./agents/connect').disconnect(); host?.detachRelay?.(); updateTray(); } },
       ],
     };
   }
@@ -189,7 +187,7 @@ async function connectAgents() {
       },
     });
     app.setLoginItemSettings({ openAtLogin: true }); // keep the relay running after restarts
-    startAgentRelay();
+    host?.attachRelay?.();
     const failed = results.filter(([, ok]) => !ok).map(([name, , msg]) => `${name}: ${msg}`);
     dialog.showMessageBox({
       type: failed.length ? 'warning' : 'info',
@@ -205,6 +203,64 @@ async function connectAgents() {
     connecting = false;
     updateTray();
   }
+}
+
+// ───── Company window ─────
+
+function openCompany() {
+  if (companyWin) { companyWin.show(); companyWin.focus(); return; }
+  companyWin = new BrowserWindow({
+    width: 760,
+    height: 720,
+    minWidth: 520,
+    minHeight: 420,
+    title: 'Limitty Company',
+    webPreferences: { preload: path.join(__dirname, 'company-window', 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  companyWin.setMenuBarVisibility(false);
+  companyWin.loadFile(path.join(__dirname, 'company-window', 'index.html'));
+  companyWin.on('closed', () => { companyWin = null; });
+}
+
+function companyState() {
+  const { readState } = require('./company/host');
+  if (host?.owner) {
+    const c = host.company;
+    return { owner: true, tasks: c.store.tasks, projects: c.projects(), team: c.team(), workers: require('./company/workers').WORKERS };
+  }
+  return { owner: false, ...readState(), workers: require('./company/workers').WORKERS };
+}
+
+function pushCompanyState() {
+  companyWin?.webContents.send('company:update', companyState());
+}
+
+/** Do it here if we run the Company, otherwise hand it to the process that does. */
+function companyRequest(req) {
+  if (host?.owner) {
+    host.company.handleInbox([{ id: `${Date.now()}-${Math.random()}`, source: 'pc', ...req }]);
+    host.company.tick();
+  } else {
+    require('./company/host').sendRequest(req);
+  }
+  setTimeout(pushCompanyState, 300);
+}
+
+function setupCompanyIpc() {
+  ipcMain.handle('company:state', () => companyState());
+  ipcMain.handle('company:create', (_e, { title, project, worker }) => companyRequest({ kind: 'create', title, project, worker }));
+  for (const kind of ['cancel', 'retry', 'remove']) {
+    ipcMain.handle(`company:${kind}`, (_e, task) => companyRequest({ kind, task }));
+  }
+  ipcMain.handle('company:addProject', async () => {
+    const r = await dialog.showOpenDialog(companyWin, { title: 'Choose a project folder', properties: ['openDirectory'] });
+    if (r.canceled || !r.filePaths[0]) return null;
+    companyRequest({ kind: 'addProject', path: r.filePaths[0] });
+    return require('path').basename(r.filePaths[0]);
+  });
+  ipcMain.handle('company:removeProject', (_e, name) => companyRequest({ kind: 'removeProject', name }));
+  // When another process runs the Company, watch its saved state.
+  fs.watchFile(require('./company/host').COMPANY_FILE, { interval: 2000 }, () => { if (!host?.owner) pushCompanyState(); });
 }
 
 function placeDefault() {
@@ -274,14 +330,16 @@ if (!app.requestSingleInstanceLock()) {
     });
     ipcMain.on('window:hide', () => { win?.hide(); updateTray(); });
     ipcMain.on('window:menu', () => buildTrayMenu().popup({ window: win }));
+    ipcMain.on('window:company', openCompany);
+    setupCompanyIpc();
 
     win.webContents.once('did-finish-load', refresh);
     schedule();
 
-    startAgentRelay();
+    startHost();
   });
 
-  app.on('before-quit', () => agentDaemon?.stop());
+  app.on('before-quit', () => host?.stop?.());
 
   // Keep running in the tray when the widget is closed.
   app.on('window-all-closed', (e) => e.preventDefault());

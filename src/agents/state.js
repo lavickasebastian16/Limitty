@@ -34,7 +34,7 @@ function applyEvent(sessions, ev) {
   const s = prev
     ? { ...prev }
     : { key, agent: ev.agent, id: ev.session || 'default', project: project(ev.cwd), state: 'idle', detail: 'Ready', since: ev.t, pendingTool: null };
-  if (ev.cwd) s.project = project(ev.cwd);
+  if (ev.cwd) { s.project = project(ev.cwd); s.cwd = ev.cwd; }
   s.lastEvent = ev.t;
   const d = ev.detail || {};
 

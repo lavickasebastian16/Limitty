@@ -29,6 +29,10 @@ final class AppModel {
     private(set) var agentStatus: AgentStatus?
     private(set) var agentError: String?
     private(set) var github: GitHubAccount?
+    /// Company mode: tasks for the agents on your PC (GitHub sign-in only).
+    private(set) var company: CompanyState?
+    /// Tasks sent from this phone that the PC hasn't picked up yet.
+    private(set) var pendingTasks: [CompanyRequest] = []
     private let feed = AgentFeed()
     private let githubFeed = GitHubStatusFeed()
 
@@ -43,6 +47,28 @@ final class AppModel {
         pairing = store.agentPairing()
         github = store.githubAccount()
         agentStatus = store.cachedAgentStatus()
+        company = store.cachedCompany()
+    }
+
+    var canSendTasks: Bool { github?.gistId != nil }
+
+    func sendTask(title: String, project: String, worker: String) async throws {
+        guard let gh = github else { throw LimitError("Sign in with GitHub first") }
+        let req = CompanyRequest.create(title: title, project: project, worker: worker)
+        try await githubFeed.send(req, account: gh)
+        pendingTasks.append(req)
+    }
+
+    func taskAction(_ kind: String, _ task: CompanyTask) async {
+        guard let gh = github else { return }
+        do {
+            try await githubFeed.send(.action(kind, task: task.id), account: gh)
+            agentError = nil
+        } catch let e as LimitError {
+            agentError = e.message
+        } catch {
+            agentError = error.localizedDescription
+        }
     }
 
     func refreshAgents() async {
@@ -55,7 +81,15 @@ final class AppModel {
                     github = gh
                     store.setGitHubAccount(gh)
                 }
-                status = try await githubFeed.fetch(gh)
+                let all = try await githubFeed.fetchAll(gh)
+                status = all.status
+                if let c = all.company, c != company {
+                    company = c
+                    store.saveCompany(c)
+                }
+                // Drop "sent" placeholders once the PC lists the task (or after 10 minutes).
+                let titles = Set(company?.tasks.map(\.title) ?? [])
+                pendingTasks.removeAll { titles.contains($0.title ?? "") || Date().timeIntervalSince1970 - $0.at > 600 }
             } else if let pairing {
                 status = try await feed.fetch(pairing)
             } else {
@@ -85,6 +119,8 @@ final class AppModel {
     func disconnectGitHub() {
         store.setGitHubAccount(nil)
         github = nil
+        company = nil
+        store.saveCompany(nil)
         agentStatus = nil
         store.setAgentPairing(pairing) // keeps a QR pairing if there is one; clears cached status otherwise
         WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")

@@ -1,0 +1,58 @@
+:root {
+  --bg: #f6f6f8; --card: #fff; --text: #1b1b1f; --muted: #6b6b76; --border: rgba(0,0,0,.09);
+  --accent: #d97757; --ok: #2fb57a; --warn: #f2b33d; --bad: #e5484d; --blue: #4f8cff;
+  --claude: #d97757; --codex: #1b1b1f; --agy: #4f8cff;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #131316; --card: #1c1c20; --text: #ececf1; --muted: #9a9aa6; --border: rgba(255,255,255,.09); --codex: #e8e8ea; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px 24px 40px; background: var(--bg); color: var(--text);
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 22px; }
+.sub, .note { color: var(--muted); margin: 4px 0 0; }
+.note { font-size: 11.5px; }
+.team { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--border); background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: 11.5px; white-space: nowrap; }
+.chip .dot, .badge .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+.chip.off { opacity: .5; }
+.dot.claude { background: var(--claude); } .dot.codex { background: var(--codex); } .dot.agy { background: var(--agy); }
+
+form, .task { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+form { margin-bottom: 18px; }
+textarea { width: 100%; resize: vertical; font: inherit; color: inherit; background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.row { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; max-width: 220px; }
+.spacer { flex: 1; }
+button { font: inherit; border: 0; border-radius: 8px; padding: 6px 14px; background: var(--accent); color: #fff; cursor: pointer; font-weight: 600; }
+button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); font-weight: 500; }
+button.small { padding: 3px 10px; font-size: 12px; }
+button:disabled { opacity: .5; cursor: default; }
+.error { color: var(--bad); margin: 8px 0 0; }
+
+#tasks { display: grid; gap: 10px; }
+.task header { margin: 0 0 6px; align-items: center; flex-wrap: nowrap; }
+.task h2 { font-size: 14px; margin: 0; font-weight: 600; white-space: pre-wrap; }
+.meta { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+.status { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.status.queued, .status.planning { background: rgba(79,140,255,.15); color: var(--blue); }
+.status.running { background: rgba(47,181,122,.15); color: var(--ok); }
+.status.done { background: rgba(47,181,122,.15); color: var(--ok); }
+.status.failed { background: rgba(229,72,77,.15); color: var(--bad); }
+.status.cancelled { background: rgba(128,128,128,.15); color: var(--muted); }
+.plan { margin: 8px 0 0; color: var(--muted); }
+.steps { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.step { border-top: 1px solid var(--border); padding-top: 6px; }
+.step-head { display: flex; gap: 8px; align-items: center; }
+.badge { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.step-status { margin-left: auto; font-size: 11px; color: var(--muted); }
+.step-status.running { color: var(--ok); } .step-status.failed { color: var(--bad); }
+details { margin-top: 4px; }
+summary { cursor: pointer; color: var(--muted); font-size: 11.5px; }
+pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 6px; padding: 8px; margin: 6px 0 0; max-height: 260px; overflow: auto; font-size: 11.5px; }
+.actions { display: flex; gap: 6px; margin-top: 10px; }
+.empty { color: var(--muted); text-align: center; padding: 30px; }
+.spin { display: inline-block; width: 9px; height: 9px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }

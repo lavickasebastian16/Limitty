@@ -29,7 +29,7 @@ const SLOW_DOWN_AT = 180;
 const ALERT_RESERVE = 10;
 
 class Daemon {
-  constructor(cfg, { log = () => {}, fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
+  constructor(cfg, { log = () => {}, fetchImpl = globalThis.fetch, now = () => Date.now(), company = null, skipLock = false } = {}) {
     this.cfg = cfg;
     this.log = log;
     this.fetch = fetchImpl;
@@ -45,12 +45,21 @@ class Daemon {
     this.recentAlerts = new Map();
     this.codex = new CodexWatcher();
     this.timers = [];
+    this.company = company;
+    this.skipLock = skipLock;
+    this.onCompanyChange = () => this.requestStatus();
+    this.onCompanyAlert = (a) => this.sendTaskAlert(a);
+    if (company) {
+      company.recentFolders = () => Object.values(this.sessions).map((s) => s.cwd).filter(Boolean);
+      company.on('change', this.onCompanyChange);
+      company.on('alert', this.onCompanyAlert);
+    }
   }
 
   // ───── lifecycle ─────
 
   start() {
-    if (!acquireLock()) {
+    if (!this.skipLock && !acquireLock()) {
       this.log('Another Limitty agent is already running; not starting a second one.');
       return false;
     }
@@ -58,6 +67,7 @@ class Daemon {
     this.timers.push(setInterval(() => this.readEvents(), 1000));
     this.timers.push(setInterval(() => this.ingest(this.codex.scan(this.now())), 5000));
     this.timers.push(setInterval(() => this.onTick(), 5000));
+    this.timers.push(setInterval(() => this.pollInbox(), 15_000));
     this.readEvents();
     this.ingest(this.codex.scan(this.now()));
     this.requestStatus(true);
@@ -71,7 +81,11 @@ class Daemon {
     this.timers.forEach(clearInterval);
     this.timers = [];
     this.persist();
-    releaseLock();
+    if (this.company) {
+      this.company.off('change', this.onCompanyChange);
+      this.company.off('alert', this.onCompanyAlert);
+    }
+    if (!this.skipLock) releaseLock();
   }
 
   restore() {
@@ -138,7 +152,7 @@ class Daemon {
   requestStatus(force = false) {
     const now = this.now();
     const snap = snapshot(this.sessions, { host: os.hostname(), now });
-    const print = fingerprint(snap);
+    const print = fingerprint(snap) + (this.company ? this.company.fingerprint() : '');
     const changed = print !== this.lastPrint;
     const gh = this.cfg.github;
     const heartbeatDue = now - this.lastStatusAt > (gh ? GIST_HEARTBEAT_MS : HEARTBEAT_MS);
@@ -151,7 +165,9 @@ class Daemon {
       this.lastStatusAt = now;
       // The phone learns where to subscribe for push alerts from the status itself.
       const status = { ...snap, alertsTopic: alertsTopic(this.cfg), ntfyServer: this.cfg.server };
-      github.writeStatus(gh.token, gh.gistId, status, this.fetch).catch((e) => {
+      const files = { [github.STATUS_FILE]: status };
+      if (this.company) files[github.TASKS_FILE] = this.company.snapshot();
+      github.writeFiles(gh.token, gh.gistId, files, this.fetch).catch((e) => {
         this.log(`Couldn't update the GitHub Gist: ${e.message}`);
         this.lastPrint = ''; // retry
         this.gistBackoffUntil = now + 60_000;
@@ -165,6 +181,27 @@ class Daemon {
     this.lastPrint = print;
     this.lastStatusAt = now;
     this.post(this.cfg.topic, seal(snap, this.cfg.key), {}).catch(() => {});
+  }
+
+  /** Tasks you gave from the phone (Company mode). */
+  async pollInbox() {
+    const gh = this.cfg.github;
+    if (!this.company || !gh?.token || !gh.gistId) return;
+    try {
+      const inbox = await github.readFile(gh.token, gh.gistId, github.INBOX_FILE, this.fetch);
+      if (inbox?.requests?.length) this.company.handleInbox(inbox.requests);
+    } catch (e) {
+      this.log(`Couldn't read tasks from your phone: ${e.message}`);
+    }
+  }
+
+  sendTaskAlert({ kind, task }) {
+    const where = this.cfg.showProjectNames ? ` · ${task.project.name}` : '';
+    const title = kind === 'done' ? `Task done${where}` : `Task failed${where}`;
+    const body = this.cfg.showProjectNames ? task.title.slice(0, 200) : 'Open Limitty to see the result.';
+    if (this.budgetLeft() <= 0) return;
+    const q = new URLSearchParams({ title, priority: kind === 'done' ? '3' : '4', tags: kind === 'done' ? 'white_check_mark' : 'x', click: 'limitty://tasks' });
+    this.post(`${alertsTopic(this.cfg)}?${q}`, body, {}).catch(() => {});
   }
 
   sendAlert(alert) {
@@ -230,4 +267,4 @@ function releaseLock() {
   } catch { /* ignore */ }
 }
 
-module.exports = { Daemon };
+module.exports = { Daemon, acquireLock, releaseLock };

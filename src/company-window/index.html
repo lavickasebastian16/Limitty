@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Limitty Company</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Company</h1>
+      <p class="sub">You give the task. The CEO plans it and hands it to your agents.</p>
+    </div>
+    <div id="team" class="team"></div>
+  </header>
+
+  <form id="new">
+    <textarea id="title" rows="3" placeholder="What should the team do? e.g. “Add a dark mode toggle to the settings page and write a test for it”" required></textarea>
+    <div class="row">
+      <label>Project
+        <select id="project"></select>
+      </label>
+      <button type="button" id="addProject" class="ghost">Add folder…</button>
+      <label>Worker
+        <select id="worker">
+          <option value="auto">CEO decides</option>
+          <option value="claude">Claude Code</option>
+          <option value="codex">Codex</option>
+          <option value="agy">Antigravity</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button type="submit" id="submit">Give to the CEO</button>
+    </div>
+    <p id="formError" class="error" hidden></p>
+    <p class="note">Workers run directly in the project folder and can edit files and run commands there, like when you run them yourself. Use git so you can review or undo their changes.</p>
+  </form>
+
+  <p id="remote" class="note" hidden>The Company is running in the background agent (<code>npm run agent</code>); this window shows its tasks.</p>
+  <section id="tasks"></section>
+
+  <script src="app.js"></script>
+</body>
+</html>

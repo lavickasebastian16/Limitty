@@ -25,12 +25,14 @@ async function main() {
     case 'setup': return setup(args);
     case 'run': return run();
     case 'status': return status();
+    case 'task': return task(args);
+    case 'tasks': return tasks();
     case 'pair': return pair(config.ensure());
     case 'logout': require('./connect').disconnect(); console.log('Signed out of GitHub. Run setup to connect again.'); return;
     case 'test': return test();
     case 'uninstall': return uninstall();
     default:
-      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|status|pair|test|logout|uninstall>');
+      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|status|task "…" [--in dir] [--worker w]|tasks|pair|test|logout|uninstall>');
       process.exitCode = cmd ? 1 : 0;
   }
 }
@@ -160,23 +162,51 @@ async function pair(cfg) {
 // ───────────── run / status / test / uninstall ─────────────
 
 function run() {
-  const cfg = config.load();
-  if (!cfg) {
-    console.error('Not set up yet. Run: npm run agent:setup');
-    process.exitCode = 1;
-    return;
-  }
-  const { Daemon } = require('./daemon');
   const log = (m) => {
     const line = `${new Date().toISOString()} ${m}`;
     console.log(line);
     try { fs.appendFileSync(config.FILES.log, `${line}\n`); } catch { /* ignore */ }
   };
-  const d = new Daemon(cfg, { log });
-  if (!d.start()) { process.exitCode = 0; return; }
-  const stop = () => { d.stop(); process.exit(0); };
+  const { startHost } = require('../company/host');
+  const host = startHost({ log });
+  if (!host.owner) {
+    console.log('Limitty is already running on this PC (the desktop app or another `npm run agent`).');
+    return;
+  }
+  if (!host.daemon) log('Company is running. Not connected to a phone yet: run `npm run agent:setup` to connect.');
+  const stop = () => { host.stop(); process.exit(0); };
   process.on('SIGINT', stop);
   process.on('SIGTERM', stop);
+}
+
+// ───────────── company: tasks from the terminal ─────────────
+
+function task(argv) {
+  const opt = (name) => { const i = argv.indexOf(name); return i === -1 ? null : argv.splice(i, 2)[1]; };
+  const project = opt('--in') || process.cwd();
+  const worker = opt('--worker') || 'auto';
+  const title = argv.filter((a) => a !== '--limitty-hook').join(' ').trim();
+  if (!title) {
+    console.log('Usage: limitty-agent task "what to do" [--in <folder or project name>] [--worker auto|claude|codex|agy]');
+    process.exitCode = 1;
+    return;
+  }
+  const { sendRequest } = require('../company/host');
+  sendRequest({ kind: 'create', title, project: fs.existsSync(project) ? path.resolve(project) : project, worker });
+  console.log('Sent to the CEO. Watch it with `limitty-agent tasks`, in the desktop app, or on your phone.');
+  console.log('(Limitty must be running: the desktop app or `npm run agent`.)');
+}
+
+function tasks() {
+  const { readState } = require('../company/host');
+  const { tasks: list } = readState();
+  if (!list.length) { console.log('No tasks yet. Add one with: limitty-agent task "…" --in <folder>'); return; }
+  const icon = { queued: '…', planning: '✎', running: '●', done: '✓', failed: '✗', cancelled: '–' };
+  for (const t of list.slice(0, 15)) {
+    console.log(`${icon[t.status] || '?'} [${t.project.name}] ${t.title.split('\n')[0].slice(0, 70)}  (${t.status})`);
+    for (const st of t.plan?.steps || []) console.log(`    ${icon[st.status === 'pending' ? 'queued' : st.status] || '?'} ${st.worker}: ${st.title}`);
+    if (t.error) console.log(`    ${t.error}`);
+  }
 }
 
 function status() {
