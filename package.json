@@ -1,12 +1,15 @@
 {
   "name": "limitty",
   "version": "0.1.0",
-  "description": "Tiny always-on-top desktop widget showing your Claude, Codex and Antigravity (agy) usage limits.",
+  "description": "Claude, Codex and Antigravity (agy) usage limits and agent status: desktop widget, iPhone app, and a PC companion.",
   "main": "src/main.js",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
     "check": "node src/cli.js",
+    "agent": "node src/agents/cli.js run",
+    "agent:setup": "node src/agents/cli.js setup",
+    "agent:status": "node src/agents/cli.js status",
     "test": "node --test"
   },
   "devDependencies": {
@@ -14,5 +17,11 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  },
+  "bin": {
+    "limitty-agent": "src/agents/cli.js"
   }
 }

@@ -114,4 +114,63 @@ public struct ErrorLine: View {
         }
     }
 }
+
+// MARK: agent status
+
+public extension AgentState {
+    var color: Color {
+        switch self {
+        case .working: Color(red: 0.19, green: 0.71, blue: 0.48)
+        case .attention: Color(red: 0.95, green: 0.42, blue: 0.20)
+        case .waiting: Color(red: 0.95, green: 0.70, blue: 0.24)
+        case .idle: Color.secondary
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .working: "bolt.circle.fill"
+        case .attention: "exclamationmark.circle.fill"
+        case .waiting: "questionmark.circle.fill"
+        case .idle: "checkmark.circle"
+        }
+    }
+}
+
+public struct AgentRow: View {
+    let session: AgentSession
+    let compact: Bool
+
+    public init(_ session: AgentSession, compact: Bool = false) {
+        self.session = session
+        self.compact = compact
+    }
+
+    public var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: session.state.symbol)
+                .foregroundStyle(session.state.color)
+                .font(compact ? .caption : .body)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(session.name).fontWeight(.semibold)
+                    if !session.project.isEmpty {
+                        Text(session.project).foregroundStyle(.secondary)
+                    }
+                }
+                .font(compact ? .caption2 : .subheadline)
+                .lineLimit(1)
+                Text(compact ? session.state.label : session.detail)
+                    .font(compact ? .system(size: 10) : .caption)
+                    .foregroundStyle(session.state == .attention ? session.state.color : .secondary)
+                    .lineLimit(compact ? 1 : 2)
+                if !compact {
+                    (Text(session.state.label) + Text(" · ") + Text(session.sinceDate, style: .relative))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
+    }
+}
 #endif

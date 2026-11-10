@@ -74,6 +74,16 @@ The first time you open the app, iOS will say the developer is untrusted. Go to 
 
 Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minutes; iOS decides exactly when. Opening the app refreshes right away. When offline, the widget keeps the last numbers for up to a day and shows a ⏱ clock icon.
 
+## Agent status from your PC
+
+The **Agents on your PC** section, and the **Limitty Agents** widget, show whether Claude Code, Codex and Antigravity on your PC are working, need you, or are idle:
+
+1. On your PC, in the repo folder, run `npm install` then `npm run agent:setup`.
+2. Scan the QR code it shows with the iPhone **Camera** app; it opens Limitty and pairs. Or paste the `limitty://pair…` link under **Pair with your PC**.
+3. For push alerts, tap **Get alerts on this iPhone** and subscribe to the topic in the free **ntfy** app.
+
+While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so rely on the ntfy alerts for "needs you". The main README has details on how each agent is detected.
+
 ## Free Apple ID limits
 
 - **The app stops opening after 7 days.** Plug in and run `xtool dev` again to renew it. Your logins are kept.

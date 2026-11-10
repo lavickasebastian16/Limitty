@@ -3,6 +3,7 @@ version: 1
 bundleID: com.limitty.app
 product: Limitty
 iconPath: Resources/AppIcon.png
+infoPath: Limitty-Info.plist
 entitlementsPath: Limitty.entitlements
 extensions:
   - product: LimittyWidget

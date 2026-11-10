@@ -7,6 +7,7 @@ import LimittyCore
 struct LimittyWidgetBundle: WidgetBundle {
     var body: some Widget {
         LimitsWidget()
+        AgentsWidget()
     }
 }
 
@@ -171,6 +172,124 @@ struct LimitsWidgetView: View {
                         .gaugeStyle(.accessoryLinearCapacity)
                 }
             }
+        }
+    }
+}
+
+// MARK: - Agents on your PC
+
+struct AgentsWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: "AgentsWidget", provider: AgentsTimeline()) { entry in
+            AgentsWidgetView(entry: entry)
+                .containerBackground(.fill.tertiary, for: .widget)
+                .widgetURL(URL(string: "limitty://agents"))
+        }
+        .configurationDisplayName("Limitty Agents")
+        .description("Whether Claude Code, Codex and Antigravity on your PC are working, need you, or are idle.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryInline, .accessoryCircular])
+    }
+}
+
+struct AgentsEntry: TimelineEntry {
+    var date: Date
+    var paired: Bool
+    var status: AgentStatus?
+}
+
+struct AgentsTimeline: TimelineProvider {
+    func placeholder(in context: Context) -> AgentsEntry {
+        AgentsEntry(date: .now, paired: true, status: AgentSample.status())
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (AgentsEntry) -> Void) {
+        let store = SharedStore.shared
+        let cached = store.cachedAgentStatus()
+        completion(AgentsEntry(date: .now, paired: store.agentPairing() != nil || context.isPreview,
+                               status: cached ?? (context.isPreview ? AgentSample.status() : nil)))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AgentsEntry>) -> Void) {
+        Task {
+            let store = SharedStore.shared
+            var status = store.cachedAgentStatus()
+            if let pairing = store.agentPairing(), let fresh = try? await AgentFeed().fetch(pairing) {
+                status = fresh
+                store.saveAgentStatus(fresh)
+            }
+            // iOS limits how often widgets refresh; open Limitty or use ntfy alerts for instant updates.
+            completion(Timeline(entries: [AgentsEntry(date: .now, paired: store.agentPairing() != nil, status: status)],
+                                policy: .after(.now.addingTimeInterval(5 * 60))))
+        }
+    }
+}
+
+struct AgentsWidgetView: View {
+    let entry: AgentsEntry
+    @Environment(\.widgetFamily) private var family
+
+    var body: some View {
+        if !entry.paired {
+            VStack(spacing: 4) {
+                Image(systemName: "desktopcomputer")
+                Text("Pair with your PC in Limitty").font(.caption).multilineTextAlignment(.center)
+            }
+        } else if let status = entry.status {
+            switch family {
+            case .accessoryInline: Text(status.summary)
+            case .accessoryCircular: circular(status)
+            case .accessoryRectangular: rectangular(status)
+            case .systemSmall: list(status, max: 3, compact: true)
+            default: list(status, max: 4, compact: false)
+            }
+        } else {
+            Text("Waiting for your PC…").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func header(_ status: AgentStatus) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: status.pcOnline() ? "desktopcomputer" : "desktopcomputer.trianglebadge.exclamationmark")
+            Text(status.pcOnline() ? status.summary : "PC offline")
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .font(.caption2.weight(.semibold))
+        .foregroundStyle(status.count(.attention) > 0 ? AgentState.attention.color : .secondary)
+    }
+
+    private func list(_ status: AgentStatus, max: Int, compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 5 : 6) {
+            header(status)
+            ForEach(status.sessions.prefix(max), id: \.key) { AgentRow($0, compact: compact) }
+            if status.sessions.isEmpty {
+                Text("No agents running").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+            (Text("as of ") + Text(status.sentDate, style: .time))
+                .font(.system(size: 9)).foregroundStyle(.tertiary)
+        }
+    }
+
+    private func rectangular(_ status: AgentStatus) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(status.sessions.prefix(3), id: \.key) { s in
+                HStack(spacing: 3) {
+                    Image(systemName: s.state.symbol)
+                    Text("\(s.name) \(s.project)").lineLimit(1)
+                }
+                .font(.caption)
+            }
+            if status.sessions.isEmpty { Text("No agents running").font(.caption) }
+        }
+    }
+
+    private func circular(_ status: AgentStatus) -> some View {
+        let needs = status.count(.attention)
+        let busy = status.count(.working) + status.count(.waiting)
+        return VStack(spacing: 0) {
+            Image(systemName: needs > 0 ? "exclamationmark.circle.fill" : busy > 0 ? "bolt.circle.fill" : "checkmark.circle")
+            Text("\(needs > 0 ? needs : busy)").font(.headline)
         }
     }
 }

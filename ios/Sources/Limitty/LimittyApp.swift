@@ -24,9 +24,54 @@ final class AppModel {
     let store = SharedStore.shared
     private let service = LimitsService()
 
+    // Agent status relayed from the PC companion.
+    private(set) var pairing: AgentPairing?
+    private(set) var agentStatus: AgentStatus?
+    private(set) var agentError: String?
+    private let feed = AgentFeed()
+
     init() {
         signedIn = Set(service.signedIn)
         for s in service.cached() { snapshots[s.provider] = s }
+        pairing = store.agentPairing()
+        agentStatus = store.cachedAgentStatus()
+    }
+
+    func refreshAgents() async {
+        guard let pairing else { return }
+        do {
+            if let status = try await feed.fetch(pairing), status != agentStatus {
+                agentStatus = status
+                store.saveAgentStatus(status)
+                WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
+            }
+            agentError = nil
+        } catch let e as LimitError {
+            agentError = e.message
+        } catch {
+            agentError = "Can't reach \(pairing.server)"
+        }
+    }
+
+    func pair(_ p: AgentPairing) {
+        store.setAgentPairing(p)
+        pairing = p
+        agentStatus = nil
+        agentError = nil
+        Task { await refreshAgents() }
+    }
+
+    func unpair() {
+        store.setAgentPairing(nil)
+        pairing = nil
+        agentStatus = nil
+        WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
+    }
+
+    /// limitty://pair?… (from the QR code) or limitty://agents (from an alert).
+    func handle(_ url: URL) {
+        if url.host == "pair", let p = AgentPairing.parse(url.absoluteString) { pair(p) }
+        Task { await refreshAgents() }
     }
 
     func refresh() async {

@@ -9,6 +9,17 @@ Guide: **[ios/README.md](ios/README.md)**.
 
 Rather not set up xtool? [`scriptable/`](scriptable/README.md) has a lighter widget-only version for the free Scriptable app.
 
+## 🤖 Agent status on your iPhone (Claude Code, Codex, agy)
+
+See whether each agent on your PC is **working**, **needs you** (a permission prompt or question), or **idle**, and get a push alert when one needs you or finishes. A small companion on your PC watches the agents and relays their status to the iPhone app, end-to-end encrypted, through [ntfy](https://ntfy.sh).
+
+```bash
+npm install
+npm run agent:setup   # installs the hooks, starts the relay at login, shows a QR code
+```
+
+Scan the QR code with your iPhone's Camera app to pair. Then, in Limitty, tap **Get alerts on this iPhone** to set up the free ntfy app for push alerts. More details are below under [How agent status works](#how-agent-status-works).
+
 ## 🖥️ Desktop widget (Claude + Codex + agy)
 
 A small always-on-top window for Windows, macOS and Linux. It reads the logins your CLIs already store on the computer. Antigravity only works here, because its quota lives on the computer that runs it.
@@ -83,3 +94,27 @@ src/cli.js               Terminal output
 ios/                     iPhone app + widget (SwiftUI, built with xtool)
 scriptable/              iPhone widget as a Scriptable script
 ```
+
+## How agent status works
+
+| Agent | How Limitty knows | Needs you | Finished |
+|---|---|---|---|
+| **Claude Code** | hooks in `~/.claude/settings.json` | ✅ permission prompts and questions (Notification hook) | ✅ Stop hook |
+| **Codex** | its session logs (`~/.codex/sessions`), plus `notify` in `~/.codex/config.toml` | ⚠️ guessed: Codex doesn't log approval prompts, so a command that's been pending for 30 s shows as "maybe waiting" | ✅ |
+| **Antigravity (agy)** | hooks in `~/.gemini/config/hooks.json` | ⚠️ guessed, the same way as Codex | ✅ Stop hook |
+
+- **Commands:**
+  - `npm run agent` runs the relay (setup already makes it start at login on Windows, macOS and Linux with systemd).
+  - `npm run agent:status` shows what it sees.
+  - `node src/agents/cli.js test` sends a test alert.
+  - `node src/agents/cli.js pair` shows the QR code again.
+  - `node src/agents/cli.js uninstall` removes the hooks and the start-at-login entry.
+- **Restart open agent sessions** after setup so they load the hooks.
+- **WSL:** run the agent **inside WSL** if your agents run there.
+- **Privacy:**
+  - Status is encrypted (AES-256-GCM) with a key that's only on your PC and phone. ntfy only sees ciphertext.
+  - Push alerts are plain text so the ntfy app can show them: agent name, project folder, and the prompt message. Set `"showProjectNames": false` in `~/.limitty/agent.json` to send only the agent name.
+- **Limits:**
+  - ntfy.sh's free tier allows 250 messages a day per IP address. Limitty sends status only when something changes (at most every 30 s), plus a heartbeat every 30 minutes, and slows down if it gets close to the limit.
+  - For more, set `server` and `token` in `~/.limitty/agent.json` to your own ntfy server or a paid account, then pair again.
+- **Desktop widget:** while it's open, the desktop widget runs the relay too, so only one copy runs.

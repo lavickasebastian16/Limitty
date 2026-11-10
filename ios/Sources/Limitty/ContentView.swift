@@ -6,10 +6,14 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
     @State private var loginFor: Provider?
+    @State private var showPair = false
+    @State private var showAlerts = false
 
     var body: some View {
         NavigationStack {
             List {
+                AgentsSection(showPair: $showPair, showAlerts: $showAlerts)
+
                 if !model.store.isShared {
                     Section {
                         Label("The widget can't read your logins because the shared App Group is missing. Reinstall with `xtool dev`.",
@@ -54,12 +58,22 @@ struct ContentView: View {
                     if model.refreshing {
                         ProgressView()
                     } else {
-                        Button { Task { await model.refresh() } } label: { Image(systemName: "arrow.clockwise") }
-                            .disabled(model.signedIn.isEmpty)
+                        Button {
+                            Task {
+                                async let limits: Void = model.refresh()
+                                async let agents: Void = model.refreshAgents()
+                                _ = await (limits, agents)
+                            }
+                        } label: { Image(systemName: "arrow.clockwise") }
+                            .disabled(model.signedIn.isEmpty && model.pairing == nil)
                     }
                 }
             }
-            .refreshable { await model.refresh() }
+            .refreshable {
+                async let limits: Void = model.refresh()
+                async let agents: Void = model.refreshAgents()
+                _ = await (limits, agents)
+            }
             .sheet(item: $loginFor) { provider in
                 if provider.usesGoogleOAuth {
                     GoogleLoginView { credential in model.save(credential, for: provider) }
@@ -69,10 +83,20 @@ struct ContentView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showPair) { PairView() }
+            .sheet(isPresented: $showAlerts) { AlertsSetupView() }
             .task { await model.refresh() }
+            .task(id: scenePhase) {
+                // Keep agent status fresh while the app is open.
+                while scenePhase == .active && !Task.isCancelled {
+                    await model.refreshAgents()
+                    try? await Task.sleep(for: .seconds(15))
+                }
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.refresh() } }
             }
+            .onOpenURL { model.handle($0) }
         }
     }
 

@@ -18,6 +18,7 @@ let tray = null;
 let timer = null;
 let lastResults = [];
 let config = { ...DEFAULTS };
+let agentDaemon = null;
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
@@ -202,7 +203,22 @@ if (!app.requestSingleInstanceLock()) {
 
     win.webContents.once('did-finish-load', refresh);
     schedule();
+
+    // If the agent relay is set up (npm run agent:setup), run it while the widget is open.
+    // It quietly does nothing when another copy is already running.
+    try {
+      const agentConfig = require('./agents/config').load();
+      if (agentConfig) {
+        const { Daemon } = require('./agents/daemon');
+        agentDaemon = new Daemon(agentConfig, { log: (m) => console.log(`[agent] ${m}`) });
+        if (!agentDaemon.start()) agentDaemon = null;
+      }
+    } catch (e) {
+      console.error('[agent]', e.message);
+    }
   });
+
+  app.on('before-quit', () => agentDaemon?.stop());
 
   // Keep running in the tray when the widget is closed.
   app.on('window-all-closed', (e) => e.preventDefault());
