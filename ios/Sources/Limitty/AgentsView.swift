@@ -42,7 +42,8 @@ struct AgentsSection: View {
                 if let error = model.agentError {
                     Text(error).font(.footnote).foregroundStyle(.red)
                 }
-                if model.alertsTopic != nil {
+                // With GitHub, alerts are under Notifications; the ntfy setup is for QR pairing.
+                if model.github == nil, model.alertsTopic != nil {
                     Button { showAlerts = true } label: {
                         Label("Get alerts on this iPhone", systemImage: "bell.badge")
                     }

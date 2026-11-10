@@ -9,6 +9,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 function pill(a) {
   if (a.job === 'installing') return '<span class="pill busy"><span class="spin"></span>Installing…</span>';
   if (a.job === 'queued') return '<span class="pill busy">Waiting to install</span>';
+  if (a.job === 'signin') return '<span class="pill busy"><span class="spin"></span>Waiting for sign-in</span>';
   if (!a.installed) return '<span class="pill no">Not installed</span>';
   const v = a.version ? ` · ${esc(a.version)}` : '';
   if (a.signedIn === true) return `<span class="pill ok">Signed in${v}</span>`;
@@ -17,12 +18,30 @@ function pill(a) {
 }
 
 function side(a) {
-  if (a.job) return '';
+  if (a.job === 'signin') return `<button class="small ghost" data-skip="${a.id}">Skip</button>`;
+  if (a.job || !a.chosen) return '';
   if (!a.installed) {
-    return a.canInstall ? `<button class="small" data-install="${a.id}" ${state.busy ? 'disabled' : ''}>Install</button>` : '';
+    return a.canInstall ? `<button class="small ghost" data-install="${a.id}" ${state.busy ? 'disabled' : ''}>Install</button>` : '';
   }
-  const label = a.signedIn === true ? 'Sign in again' : 'Sign in';
-  return `<button class="small ${a.signedIn === true ? 'ghost' : ''}" data-login="${a.id}" ${state.busy ? 'disabled' : ''}>${label}</button>`;
+  // signedIn null = can't tell (Antigravity): offer it quietly.
+  const label = a.signedIn === false ? 'Sign in' : 'Sign in again';
+  return `<button class="small ${a.signedIn === false ? '' : 'ghost'}" data-login="${a.id}" ${state.busy ? 'disabled' : ''}>${label}</button>`;
+}
+
+const ICONS = { todo: '○', running: '<span class="spin"></span>', done: '✓', failed: '✕', skipped: '!' };
+
+function renderSteps() {
+  const s = state.setup;
+  $('steps').hidden = !s;
+  $('code').hidden = !s?.code;
+  if (s?.code) $('userCode').textContent = s.code.userCode;
+  if (!s) return;
+  $('steps').innerHTML = s.steps.map((st) => `
+    <li class="${st.state}">
+      <span class="ico">${ICONS[st.state] || ''}</span>
+      <span class="lbl">${esc(st.label)}</span>
+      ${st.note ? `<span class="nt">${esc(st.note)}</span>` : ''}
+    </li>`).join('');
 }
 
 function render() {
@@ -33,18 +52,21 @@ function render() {
       <div class="side">${side(a)}</div>
       <div class="about">${esc(a.about)}</div>
       ${a.error ? `<div class="err">${esc(a.error)}</div>` : ''}
+      ${a.note ? `<div class="hint">${esc(a.note)}</div>` : ''}
       ${a.loginCommand ? `<div class="hint">No terminal app found. Open one and run <code>${esc(a.loginCommand)}</code> to sign in.</div>` : ''}
-      ${a.loginOpened ? `<div class="hint">A terminal window opened. ${esc(a.loginHint)} Then close it; Limitty notices on its own.</div>` : ''}
     </div>`).join('');
 
-  const missing = state.agents.filter((a) => a.chosen && !a.installed && a.canInstall && !a.job);
-  $('install').disabled = state.busy || !missing.length;
-  $('install').textContent = missing.length ? `Install ${missing.map((a) => a.name).join(' and ')}` : 'Install selected';
   const picked = state.agents.filter((a) => a.chosen);
-  $('summary').textContent = state.busy
-    ? 'Installing… this can take a minute.'
+  const ready = picked.length && picked.every((a) => a.installed && a.signedIn !== false) && state.phoneLinked;
+  const btn = $('install');
+  btn.disabled = state.busy || !picked.length;
+  btn.innerHTML = state.busy ? '<span class="spin"></span>Setting up…' : ready ? 'Run setup again' : 'Install agents';
+  btn.classList.toggle('ghost', !!ready && !state.busy);
+  $('summary').innerHTML = state.busy ? 'Follow along below. You only need to sign in when asked.'
     : !picked.length ? 'Pick at least one agent.'
-      : missing.length ? '' : `Using ${picked.map((a) => a.name).join(', ')}.`;
+      : ready ? `<span class="allset">✓ All set</span>${state.githubLogin ? ` · iPhone linked as @${esc(state.githubLogin)}` : ''}`
+        : '';
+  renderSteps();
   $('version').textContent = state.version ? `Limitty ${state.version}` : '';
 }
 
@@ -57,25 +79,26 @@ document.addEventListener('change', async (e) => {
 });
 
 document.addEventListener('click', async (e) => {
-  const t = e.target.closest('button');
+  const t = e.target.closest('button, a');
   if (!t) return;
-  if (t.dataset.install) {
-    const ids = [...new Set([...state.agents.filter((a) => a.chosen).map((a) => a.id), t.dataset.install])];
-    await agents.choose(ids);
-    install([t.dataset.install]);
+  if (t.id === 'openGitHub') {
+    e.preventDefault();
+    if (state.setup?.code) agents.openExternal(state.setup.code.verificationUri);
+  } else if (t.dataset.install) {
+    $('logBox').hidden = false;
+    agents.install(t.dataset.install).then((s) => { state = s; render(); });
   } else if (t.dataset.login) {
     state = await agents.login(t.dataset.login);
+    render();
+  } else if (t.dataset.skip) {
+    state = await agents.skip(t.dataset.skip);
     render();
   }
 });
 
-function install(ids) {
-  $('logBox').hidden = false;
-  agents.install(ids).then((s) => { state = s; render(); });
-}
-
 $('install').addEventListener('click', () => {
-  install(state.agents.filter((a) => a.chosen && !a.installed && a.canInstall).map((a) => a.id));
+  $('logBox').hidden = false;
+  agents.setup().then((s) => { state = s; render(); });
 });
 $('done').addEventListener('click', () => agents.done());
 

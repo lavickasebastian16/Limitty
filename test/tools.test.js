@@ -45,9 +45,9 @@ test('finds agents in ~/.local/bin even when it is not on PATH', () => {
   assert.strictEqual(tools.status().find((a) => a.id === 'codex').signedIn, true);
 });
 
-test('before you choose, installed agents count as chosen; then your choice wins', () => {
+test('before you choose, all agents are ticked; then your choice wins', () => {
   assert.strictEqual(tools.hasChosen(), false);
-  assert.deepStrictEqual(tools.chosen(), ['codex']);
+  assert.deepStrictEqual(tools.chosen(), ['claude', 'codex', 'agy']);
   tools.choose(['agy', 'claude', 'nonsense']);
   assert.strictEqual(tools.hasChosen(), true);
   assert.deepStrictEqual(tools.chosen(), ['claude', 'agy']); // fixed order, unknown ids dropped
@@ -90,11 +90,35 @@ test('picks a terminal for signing in: Omarchy first, then common ones', () => {
 test('the sign-in line runs the installed command and waits before closing', () => {
   const line = tools.loginShellLine('codex');
   assert.match(line, /\.local\/bin\/codex login;/);
-  assert.match(line, /read -r -p/);
+  assert.match(line, /touch .*signin-codex\.done/);
+  assert.match(line, /read -r -t 15/);
 });
 
 test('openLogin hands back the command when no terminal can be opened', () => {
   const r = tools.openLogin('codex', { spawnImpl: () => { throw new Error('nope'); } });
   assert.strictEqual(r.ok, false);
   assert.match(r.command, /codex login$/);
+});
+
+test('signIn waits for the sign-in to finish, or Skip', async () => {
+  // Codex: signed in once auth.json appears.
+  fs.rmSync(path.join(HOME, '.codex', 'auth.json'), { force: true });
+  const a = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
+  setTimeout(() => fs.writeFileSync(path.join(HOME, '.codex', 'auth.json'), '{}'), 60);
+  assert.strictEqual(await a.promise, 'signed-in');
+  // agy can't be checked: done when its terminal command finishes.
+  const b = tools.signIn('agy', { openImpl: () => ({ ok: true, command: 'agy' }), pollMs: 20 });
+  setTimeout(() => fs.writeFileSync(tools.loginDoneFile('agy'), ''), 60);
+  assert.strictEqual(await b.promise, 'signed-in');
+  assert.strictEqual(fs.existsSync(tools.loginDoneFile('agy')), false);
+  // Closed without signing in.
+  fs.rmSync(path.join(HOME, '.codex', 'auth.json'));
+  const c = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
+  setTimeout(() => fs.writeFileSync(tools.loginDoneFile('codex'), ''), 60);
+  assert.strictEqual(await c.promise, 'closed');
+  const d = tools.signIn('codex', { openImpl: () => ({ ok: true, command: 'codex login' }), pollMs: 20 });
+  d.skip();
+  assert.strictEqual(await d.promise, 'skipped');
+  const e = tools.signIn('codex', { openImpl: () => ({ ok: false, command: 'codex login' }) });
+  assert.strictEqual(await e.promise, 'no-terminal');
 });

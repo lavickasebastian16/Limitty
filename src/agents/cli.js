@@ -230,12 +230,25 @@ function status() {
 async function test() {
   const cfg = config.load();
   if (!cfg) { console.error('Not set up yet. Run: npm run agent:setup'); return; }
+  // Bark (set up on the phone): one alert of each kind, so you hear both sounds.
+  const notify = require('./notify');
+  let phone = null;
+  if (cfg.github?.token && cfg.github.gistId) {
+    try { phone = notify.normalize((await require('./github').readFiles(cfg.github.token, cfg.github.gistId))[notify.PHONE_FILE]); } catch { /* fall back */ }
+  }
+  if (phone) {
+    await notify.sendBark(phone, 'attention', { title: 'Limitty test: an agent needs you', body: `This is the "needs permission" sound (${phone.sounds.attention}).` });
+    await new Promise((r) => setTimeout(r, 4000));
+    await notify.sendBark(phone, 'finished', { title: 'Limitty test: an agent is done', body: `This is the "done" sound (${phone.sounds.done}).` });
+    console.log('Sent two test alerts through Bark: "needs you", then "done".');
+    return;
+  }
   const res = await fetch(`${cfg.server}/${config.alertsTopic(cfg)}`, {
     method: 'POST',
     body: 'If you can read this on your iPhone, alerts work.',
     headers: { Title: 'Limitty test alert', Tags: 'tada', ...(cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {}) },
   });
-  console.log(res.ok ? 'Sent a test alert.' : `ntfy returned HTTP ${res.status}`);
+  console.log(res.ok ? 'Sent a test alert through ntfy.' : `ntfy returned HTTP ${res.status}`);
 }
 
 function uninstall() {

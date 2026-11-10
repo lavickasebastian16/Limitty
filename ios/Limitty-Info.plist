@@ -3,12 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleVersion</key>
-	<string>101000</string>
+	<string>102000</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.01.000</string>
+	<string>1.02.000</string>
 	<key>CFBundleDisplayName</key>
 	<string>Limitty</string>
 	<!-- limitty://pair?… (QR code from `npm run agent:setup`) and limitty://agents (alert taps). -->
+	<!-- Lets iOS wake Limitty now and then to check on your agents and alert you. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.limitty.app.refresh</string>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

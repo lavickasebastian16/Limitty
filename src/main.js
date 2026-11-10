@@ -203,16 +203,26 @@ async function connectAgents() {
 // ───── Agents window: choose, install and sign in ─────
 
 const PROVIDER_OF = { claude: 'claude', codex: 'codex', agy: 'antigravity' };
-const agentJobs = {}; // id → { job: 'queued'|'installing', error, loginCommand, loginOpened }
+const agentJobs = {}; // id → { job: 'queued'|'installing'|'signin', error, loginCommand, note }
+const signIns = {}; // id → { skip } while waiting for you to sign in
 let installing = false;
+// The one-click setup: each step's state ('todo'|'running'|'done'|'skipped'|'failed') and a note.
+const SETUP_STEPS = [
+  ['install', 'Install the agents'],
+  ['signin', 'Sign in to each agent'],
+  ['phone', 'Link your iPhone (GitHub)'],
+  ['hooks', 'Live status and alerts for your phone'],
+  ['autostart', 'Start Limitty at login'],
+];
+let setup = null; // { steps: { id: { state, note } }, code, finished }
 
 function openAgents() {
   if (agentsWin) { agentsWin.show(); agentsWin.focus(); return; }
   agentsWin = new BrowserWindow({
-    width: 620,
-    height: 560,
+    width: 640,
+    height: 720,
     minWidth: 460,
-    minHeight: 380,
+    minHeight: 420,
     title: 'Limitty Agents',
     webPreferences: { preload: path.join(__dirname, 'agents-window', 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
@@ -224,9 +234,21 @@ function openAgents() {
 function agentsState() {
   const list = tools.status().map((a) => {
     const j = agentJobs[a.id] || {};
-    return { ...a, job: j.job || null, error: j.error || null, loginCommand: j.loginCommand || null, loginOpened: !!j.loginOpened && a.signedIn !== true };
+    return { ...a, job: j.job || null, error: j.error || null, loginCommand: j.loginCommand || null, note: j.note || null };
   });
-  return { agents: list, busy: installing, version: VERSION };
+  const cfg = agentConfig();
+  return {
+    agents: list,
+    busy: installing,
+    setup: setup && {
+      steps: SETUP_STEPS.map(([id, label]) => ({ id, label, ...(setup.steps[id] || { state: 'todo' }) })),
+      code: setup.code,
+      finished: setup.finished,
+    },
+    phoneLinked: !!cfg?.github?.token,
+    githubLogin: cfg?.github?.login || null,
+    version: VERSION,
+  };
 }
 
 function pushAgentsState() {
@@ -243,58 +265,141 @@ function applyChoice(ids) {
   return chosen;
 }
 
-/** Hooks for live status on the phone, if you've connected it. */
-function reinstallHooksIfConnected() {
-  if (!agentConfig()) return;
-  try { require('./agents/connect').installHooks(); } catch { /* shown in the menu instead */ }
-}
+const agentLog = (line) => agentsWin?.webContents.send('agents:log', line);
 
-async function installAgents(ids) {
-  ids = ids.filter((id) => tools.TOOLS[id] && !tools.find(id));
-  if (installing || !ids.length) return agentsState();
-  installing = true;
-  for (const id of ids) agentJobs[id] = { job: 'queued' };
+async function installOne(id) {
+  agentJobs[id] = { job: 'installing' };
   pushAgentsState();
-  const log = (line) => agentsWin?.webContents.send('agents:log', line);
-  for (const id of ids) {
-    agentJobs[id] = { job: 'installing' };
-    pushAgentsState();
-    log(`── Installing ${tools.TOOLS[id].name} ──`);
-    const r = await tools.install(id, { onLine: log }).promise;
-    if (r.ok) {
-      log(`✓ ${tools.TOOLS[id].name} installed: ${r.path}`);
-      agentJobs[id] = {};
-      // Straight on to signing in, unless it already is.
-      if (tools.TOOLS[id].signedIn() !== true) loginAgent(id);
-    } else {
-      log(`✗ ${tools.TOOLS[id].name}: ${r.error}`);
-      agentJobs[id] = { error: `Install failed: ${r.error}` };
-    }
-    pushAgentsState();
-  }
-  installing = false;
-  require('./company/workers').isInstalled.clearCache?.();
-  reinstallHooksIfConnected();
-  refresh();
-  return agentsState();
+  agentLog(`── Installing ${tools.TOOLS[id].name} ──`);
+  const r = await tools.install(id, { onLine: agentLog }).promise;
+  agentLog(r.ok ? `✓ ${tools.TOOLS[id].name} installed: ${r.path}` : `✗ ${tools.TOOLS[id].name}: ${r.error}`);
+  agentJobs[id] = r.ok ? {} : { error: `Install failed: ${r.error}` };
+  pushAgentsState();
+  return r.ok;
 }
 
-function loginAgent(id) {
-  const r = tools.openLogin(id);
-  agentJobs[id] = { ...(agentJobs[id] || {}), loginOpened: r.ok, loginCommand: r.ok ? null : r.command };
-  setTimeout(refresh, 60_000); // pick up the new limits once you've signed in
+/** Opens the sign-in terminal and waits until you're done there (or press Skip). */
+async function signInOne(id) {
+  agentJobs[id] = { job: 'signin', note: `A terminal window opened. ${tools.TOOLS[id].loginHint}` };
+  const s = tools.signIn(id);
+  signIns[id] = s;
+  pushAgentsState();
+  const r = await s.promise;
+  delete signIns[id];
+  agentJobs[id] = r === 'no-terminal'
+    ? { loginCommand: s.command }
+    : r === 'closed' ? { error: 'Not signed in yet. Press Sign in to try again.' } : {};
+  pushAgentsState();
+  setTimeout(refresh, 3000); // show the new limits
+  return r;
+}
+
+function setStep(id, state, note) {
+  if (!setup) return;
+  setup.steps[id] = { state, note: note || null };
+  pushAgentsState();
+}
+
+/** Everything, one click: install → sign in → link the phone → hooks → start at login. */
+async function runSetup() {
+  if (installing) return agentsState();
+  installing = true;
+  setup = { steps: {}, code: null, finished: false };
+  const chosen = tools.hasChosen() ? tools.chosen() : applyChoice(tools.chosen());
+  try {
+    // 1. Install
+    setStep('install', 'running');
+    const missing = chosen.filter((id) => !tools.find(id));
+    for (const id of missing) agentJobs[id] = { job: 'queued' };
+    let failed = 0;
+    for (const id of missing) if (!(await installOne(id))) failed += 1;
+    require('./company/workers').isInstalled.clearCache?.();
+    setStep('install', failed ? 'failed' : 'done', missing.length
+      ? (failed ? `${failed} couldn't be installed; see below.` : `Installed ${missing.map((id) => tools.TOOLS[id].name).join(', ')}.`)
+      : 'Already installed.');
+
+    // 2. Sign in, one at a time
+    setStep('signin', 'running');
+    const needLogin = chosen.filter((id) => tools.find(id) && tools.TOOLS[id].signedIn() !== true);
+    const skipped = [];
+    for (const id of needLogin) {
+      setStep('signin', 'running', `Waiting for you to sign in to ${tools.TOOLS[id].name} in the terminal window…`);
+      const r = await signInOne(id);
+      if (r !== 'signed-in') skipped.push(tools.TOOLS[id].name);
+    }
+    setStep('signin', skipped.length ? 'skipped' : 'done', skipped.length ? `Not finished: ${skipped.join(', ')}. Use Sign in next to it any time.` : 'All signed in.');
+
+    // 3 + 4. Link the phone and install the hooks
+    const cfg = agentConfig();
+    if (cfg?.github?.token) {
+      setStep('phone', 'done', `Linked as @${cfg.github.login}.`);
+      setStep('hooks', 'running');
+      const results = require('./agents/connect').installHooks();
+      const bad = results.filter(([, ok]) => !ok);
+      setStep('hooks', bad.length ? 'failed' : 'done', bad.length ? bad.map(([n, , m]) => `${n}: ${m}`).join(' · ') : 'Restart open agent sessions to pick them up.');
+    } else {
+      setStep('phone', 'running', 'Approve Limitty on the GitHub page that opened. The code is already copied.');
+      try {
+        const { connect } = require('./agents/connect');
+        const { login, results } = await connect({
+          onCode: ({ userCode, verificationUri }) => {
+            clipboard.writeText(userCode);
+            shell.openExternal(verificationUri);
+            setup.code = { userCode, verificationUri };
+            pushAgentsState();
+          },
+        });
+        setup.code = null;
+        setStep('phone', 'done', `Linked as @${login}. On your iPhone: Limitty → Sign in with GitHub (same account).`);
+        const bad = results.filter(([, ok]) => !ok);
+        setStep('hooks', bad.length ? 'failed' : 'done', bad.length ? bad.map(([n, , m]) => `${n}: ${m}`).join(' · ') : 'Restart open agent sessions to pick them up.');
+        host?.attachRelay?.();
+      } catch (e) {
+        setup.code = null;
+        setStep('phone', 'failed', e.message);
+        setStep('hooks', 'skipped', 'Needs the phone link.');
+      }
+    }
+
+    // 5. Start at login, so status and alerts keep working after a restart
+    try {
+      setStartAtLogin(true);
+      setStep('autostart', 'done');
+    } catch (e) {
+      setStep('autostart', 'failed', e.message);
+    }
+  } finally {
+    installing = false;
+    setup.finished = true;
+    pushAgentsState();
+    updateTray();
+    refresh();
+  }
   return agentsState();
 }
 
 function setupAgentsIpc() {
   ipcMain.handle('agents:state', () => agentsState());
   ipcMain.handle('agents:choose', (_e, ids) => { applyChoice(ids); return agentsState(); });
-  ipcMain.handle('agents:install', (_e, ids) => installAgents(ids));
-  ipcMain.handle('agents:login', (_e, id) => loginAgent(id));
+  ipcMain.handle('agents:setup', () => runSetup());
+  ipcMain.handle('agents:install', async (_e, id) => {
+    if (installing || tools.find(id)) return agentsState();
+    installing = true;
+    try { if (await installOne(id)) await signInOne(id); } finally { installing = false; }
+    require('./company/workers').isInstalled.clearCache?.();
+    return agentsState();
+  });
+  ipcMain.handle('agents:login', async (_e, id) => {
+    if (signIns[id]) return agentsState();
+    signInOne(id); // not awaited: the window follows along via updates
+    return agentsState();
+  });
+  ipcMain.handle('agents:skip', (_e, id) => { signIns[id]?.skip(); return agentsState(); });
   ipcMain.on('agents:done', () => {
     if (!tools.hasChosen()) applyChoice(tools.chosen());
     agentsWin?.close();
   });
+  ipcMain.on('agents:open', (_e, url) => { if (/^https:\/\/github\.com\//.test(url)) shell.openExternal(url); });
   ipcMain.on('window:agents', openAgents);
 }
 

@@ -10,12 +10,16 @@ struct ContentView: View {
     @State private var showAlerts = false
     @State private var showGitHub = false
     @State private var showNewTask = false
+    @State private var showNotifications = false
 
     var body: some View {
         NavigationStack {
             List {
                 TasksSection(showNewTask: $showNewTask, showGitHub: $showGitHub)
                 AgentsSection(showPair: $showPair, showAlerts: $showAlerts, showGitHub: $showGitHub)
+                if model.agentsConnected {
+                    NotificationsRow(show: $showNotifications)
+                }
 
                 if !model.store.isShared {
                     Section {
@@ -96,6 +100,7 @@ struct ContentView: View {
             .sheet(isPresented: $showAlerts) { AlertsSetupView() }
             .sheet(isPresented: $showGitHub) { GitHubLoginView() }
             .sheet(isPresented: $showNewTask) { NewTaskView() }
+            .sheet(isPresented: $showNotifications) { NotificationsView() }
             .task { await model.refresh() }
             .task(id: scenePhase) {
                 // Keep agent status fresh while the app is open.
@@ -106,6 +111,12 @@ struct ContentView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { Task { await model.refresh() } }
+                // Keep checking on your agents now and then while Limitty is in the background.
+                if phase == .background && model.agentsConnected { AlertCenter.shared.scheduleBackgroundRefresh() }
+            }
+            .task(id: model.agentsConnected) {
+                // Ask for notification permission once your PC is connected.
+                if model.agentsConnected { await AlertCenter.shared.requestPermission() }
             }
             .onOpenURL { model.handle($0) }
         }

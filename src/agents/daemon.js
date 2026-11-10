@@ -9,7 +9,8 @@
 //    heartbeat every 10 minutes.
 //  - Otherwise (QR-code pairing): encrypted to an ntfy topic. ntfy.sh's free tier
 //    allows 250 messages a day per IP, so at most every 30 s, heartbeat every 30 min.
-// Push alerts always go through ntfy, right away.
+// Push alerts go out right away: through Bark (different sounds for "needs you" and
+// "done", set up on the phone) if you've set it up, otherwise through ntfy.
 
 const fs = require('fs');
 const os = require('os');
@@ -18,6 +19,7 @@ const { seal } = require('./crypto');
 const { applyEvent, tick, snapshot, fingerprint, alertText } = require('./state');
 const { CodexWatcher } = require('./codex');
 const github = require('./github');
+const notify = require('./notify');
 
 const STATUS_MIN_INTERVAL_MS = 30_000;
 const STATUS_SLOW_INTERVAL_MS = 5 * 60_000; // when the daily budget runs low
@@ -43,6 +45,7 @@ class Daemon {
     this.backoffUntil = 0;
     this.gistBackoffUntil = 0;
     this.recentAlerts = new Map();
+    this.phone = loadPhoneSettings(); // Bark key + sounds, from the phone
     this.codex = new CodexWatcher();
     this.timers = [];
     this.company = company;
@@ -67,7 +70,8 @@ class Daemon {
     this.timers.push(setInterval(() => this.readEvents(), 1000));
     this.timers.push(setInterval(() => this.ingest(this.codex.scan(this.now())), 5000));
     this.timers.push(setInterval(() => this.onTick(), 5000));
-    this.timers.push(setInterval(() => this.pollInbox(), 15_000));
+    this.timers.push(setInterval(() => this.pollPhone(), 15_000));
+    this.pollPhone();
     this.readEvents();
     this.ingest(this.codex.scan(this.now()));
     this.requestStatus(true);
@@ -183,22 +187,42 @@ class Daemon {
     this.post(this.cfg.topic, seal(snap, this.cfg.key), {}).catch(() => {});
   }
 
-  /** Tasks you gave from the phone (Company mode). */
-  async pollInbox() {
+  /** What the phone wrote to the Gist: tasks (Company mode) and alert settings. One request. */
+  async pollPhone() {
     const gh = this.cfg.github;
-    if (!this.company || !gh?.token || !gh.gistId) return;
+    if (!gh?.token || !gh.gistId) return;
     try {
-      const inbox = await github.readFile(gh.token, gh.gistId, github.INBOX_FILE, this.fetch);
-      if (inbox?.requests?.length) this.company.handleInbox(inbox.requests);
+      const files = await github.readFiles(gh.token, gh.gistId, this.fetch);
+      const inbox = files[github.INBOX_FILE];
+      if (this.company && inbox?.requests?.length) this.company.handleInbox(inbox.requests);
+      const phone = notify.normalize(files[notify.PHONE_FILE]);
+      if (JSON.stringify(phone) !== JSON.stringify(this.phone)) {
+        this.phone = phone;
+        savePhoneSettings(phone);
+        this.log(phone ? 'Alerts: Bark is set up on your iPhone.' : 'Alerts: using ntfy.');
+      }
     } catch (e) {
-      this.log(`Couldn't read tasks from your phone: ${e.message}`);
+      this.log(`Couldn't read from your phone: ${e.message}`);
     }
+  }
+
+  // Older name, kept for callers.
+  pollInbox() { return this.pollPhone(); }
+
+  /** Sends through Bark if the phone set it up; returns false to fall back to ntfy. */
+  push(kind, msg) {
+    if (!this.phone) return false;
+    if (notify.wants(this.phone, kind)) {
+      notify.sendBark(this.phone, kind, msg, this.fetch).catch((e) => this.log(`Couldn't send the alert through Bark: ${e.message}`));
+    }
+    return true;
   }
 
   sendTaskAlert({ kind, task }) {
     const where = this.cfg.showProjectNames ? ` · ${task.project.name}` : '';
     const title = kind === 'done' ? `Task done${where}` : `Task failed${where}`;
     const body = this.cfg.showProjectNames ? task.title.slice(0, 200) : 'Open Limitty to see the result.';
+    if (this.push(kind === 'done' ? 'task-done' : 'task-failed', { title, body, url: 'limitty://tasks' })) return;
     if (this.budgetLeft() <= 0) return;
     const q = new URLSearchParams({ title, priority: kind === 'done' ? '3' : '4', tags: kind === 'done' ? 'white_check_mark' : 'x', click: 'limitty://tasks' });
     this.post(`${alertsTopic(this.cfg)}?${q}`, body, {}).catch(() => {});
@@ -210,8 +234,13 @@ class Daemon {
     const dedupe = `${alert.session.key}|${alert.kind}|${alert.session.detail}`;
     if (now - (this.recentAlerts.get(dedupe) || 0) < 60_000) return;
     this.recentAlerts.set(dedupe, now);
-    if (this.budgetLeft() <= 0) return;
     const a = alertText(alert, this.cfg);
+    if (this.push(alert.kind, { title: a.title, body: a.body, url: 'limitty://agents' })) {
+      this.lastStatusAt = 0;
+      setTimeout(() => this.requestStatus(), 1500);
+      return;
+    }
+    if (this.budgetLeft() <= 0) return;
     // Query parameters (rather than headers) keep non-ASCII titles intact.
     const q = new URLSearchParams({ title: a.title, priority: String(a.priority), tags: a.tags, click: 'limitty://agents' });
     this.post(`${alertsTopic(this.cfg)}?${q}`, a.body, {}).catch(() => {});
@@ -244,6 +273,17 @@ class Daemon {
       this.log(`Couldn't reach ${this.cfg.server}: ${e.message}`);
     }
   }
+}
+
+const PHONE_CACHE = () => `${FILES.dir}/phone.json`;
+function loadPhoneSettings() {
+  try { return JSON.parse(fs.readFileSync(PHONE_CACHE(), 'utf8')); } catch { return null; }
+}
+function savePhoneSettings(s) {
+  try {
+    if (s) fs.writeFileSync(PHONE_CACHE(), JSON.stringify(s), { mode: 0o600 });
+    else fs.rmSync(PHONE_CACHE(), { force: true });
+  } catch { /* ignore */ }
 }
 
 // One agent per PC: a PID lock file.

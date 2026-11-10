@@ -1,2 +1,2 @@
 // Set with: node scripts/set-version.js X.XX.XXX
-public let limittyVersion = "1.01.000"
+public let limittyVersion = "1.02.000"

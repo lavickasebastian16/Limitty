@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.01.000**
+**Version 1.02.000**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,21 +10,23 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/L
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.01.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.01.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.01.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.02.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.02.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.02.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
-## 🧩 Choose your agents (installed for you)
+## 🧩 One-click setup on your PC
 
-The first time you open the desktop app, it asks which agents you want: **Claude Code**, **Codex** and/or **Antigravity**. Tick them and press **Install**. Limitty then:
-1. Installs any that are missing, with each company's official installer. They go in `~/.local/bin`, with no admin password needed.
+Open the desktop app and press **Install agents**. It opens by itself the first time, or later from the menu (⋯) → **Choose agents…**, or with `limitty --agents`. All three agents are ticked; untick any you don't want. Limitty then does everything in order:
+1. **Installs** the missing agents with each company's official installer. They go in `~/.local/bin`, with no admin password needed.
    - **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`
    - **Codex:** the official release from [github.com/openai/codex](https://github.com/openai/codex/releases)
    - **Antigravity:** `curl -fsSL https://antigravity.google/cli/install.sh | bash`
-2. Opens a terminal window to sign in, the same way as running the tool yourself.
-3. Uses only the ticked agents: the widget shows their limits, and the Company gives them work.
+2. **Opens each sign-in** in a terminal window, one at a time, and moves on when you're done. If you're not ready, press **Skip**.
+3. **Links your iPhone** through GitHub. The browser opens with the code already copied; you just approve it.
+4. **Adds the hooks** that report agent status and alerts to your phone.
+5. **Turns on start at login.**
 
-Change your choice any time: menu (⋯) → **Choose agents…**, the **Choose agents…** button in the Company window, or `limitty --agents`.
+The only things you do yourself are the sign-ins: once per agent, plus once on GitHub. Only ticked agents show in the widget and get work from the Company.
 
 From a terminal: `node src/agents/cli.js agents` shows what's installed. Then:
 - `agents use claude codex` sets your choice.
@@ -32,6 +34,20 @@ From a terminal: `node src/agents/cli.js agents` shows what's installed. Then:
 - `agents login codex` signs in.
 
 Automatic install works on Linux and macOS. On Windows, install the agents from their websites.
+
+## 🔔 Notifications with different sounds
+
+On the iPhone, open **Notifications**. You get one sound when an agent **needs your permission** (or has a question), and a different one when it's **done**. Company tasks that finish or fail alert you too. Pick the sounds you like.
+
+- **Instant, even when Limitty is closed:**
+  1. Install **[Bark](https://apps.apple.com/app/id1403753865)**, a free push app.
+  2. Tap the copy button next to Bark's first example link.
+  3. In Limitty → Notifications, tap **Paste**.
+
+  You'll get two test alerts so you can hear both sounds. From then on your PC sends each alert straight to Bark with your chosen sound. Limitty saves the Bark key and your sounds in your private Gist; that's how the PC knows them.
+- **Without Bark:** Limitty alerts you with its own sounds while it's open, and now and then in the background when iOS allows it.
+
+Why Bark? iPhone apps installed without a paid Apple developer account can't receive pushes themselves, so a push app has to deliver them. `node src/agents/cli.js test` sends both test alerts from the PC.
 
 ## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
@@ -46,7 +62,7 @@ See whether each agent on your PC is **working**, **needs you** (a permission pr
 
 1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…**, then enter the code shown on GitHub's page. This installs the agent hooks and makes Limitty start at login. Headless or WSL? Run `npm install && npm run agent:setup` instead.
 2. **iPhone:** Limitty → **Agents on your PC** → **Sign in with GitHub**, and enter the code shown there.
-3. *Optional:* tap **Get alerts on this iPhone** to set up push alerts with the free ntfy app.
+3. Open **Notifications** to choose your sounds, and add Bark for instant alerts. See [Notifications with different sounds](#-notifications-with-different-sounds).
 
 Status is stored in a **private Gist** on your GitHub account. Limitty only asks for Gist access. More details are below under [How agent status works](#how-agent-status-works).
 
@@ -147,7 +163,7 @@ The script:
 2. Adds **Hyprland window rules** (`~/.config/hypr/limitty.conf`, or `limitty.lua` if you use `hyprland.lua`). The widget floats top-right, is pinned on every workspace, has no border or shadow, and doesn't steal focus. It also starts Limitty with Hyprland.
 3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget; right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
 
-Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
+Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents` (setup), `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
 
 ## 🔢 Versions
 

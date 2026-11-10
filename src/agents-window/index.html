@@ -11,25 +11,33 @@
   <header>
     <div>
       <h1>Your agents</h1>
-      <p class="sub">Tick the ones you want. Limitty installs any that are missing and helps you sign in.</p>
+      <p class="sub">Tick the ones you want and press <b>Install agents</b>. Limitty does the rest: installs them, opens each sign-in, links your iPhone, and turns on alerts.</p>
     </div>
   </header>
 
   <section id="list" class="list"><div class="empty">Looking for your agents…</div></section>
 
   <div class="bar">
-    <button id="install" disabled>Install selected</button>
+    <button id="install" class="big">Install agents</button>
     <span id="summary" class="note"></span>
     <span class="spacer"></span>
-    <button id="done" class="ghost">Done</button>
+    <button id="done" class="ghost">Close</button>
   </div>
+
+  <section id="code" class="code" hidden>
+    <div>Enter this code on the GitHub page that opened (it's already copied):</div>
+    <div id="userCode" class="user-code"></div>
+    <a href="#" id="openGitHub">Open the GitHub page again</a>
+  </section>
+
+  <ol id="steps" class="steps-list" hidden></ol>
 
   <details id="logBox" hidden>
     <summary>Installer output</summary>
     <pre id="log"></pre>
   </details>
 
-  <p class="note">Only ticked agents show in the widget and get work from the Company. Installers come from each company’s official site and put the agent in <code>~/.local/bin</code>, with no admin password needed. Each agent uses your own plan: Claude Pro or Max, ChatGPT, or your Google account.</p>
+  <p class="note">You only need to sign in yourself: once per agent, plus once on GitHub to link your iPhone. Only ticked agents show in the widget and get work from the Company. Installers come from each company’s official site and put the agent in <code>~/.local/bin</code>, with no admin password needed. Each agent uses your own plan: Claude Pro or Max, ChatGPT, or your Google account.</p>
   <footer id="version" class="note"></footer>
 
   <script src="app.js"></script>

@@ -128,9 +128,9 @@ function readChoice() {
   }
 }
 
-/** The agents you chose; before you choose, every installed one counts. */
+/** The agents you chose; before you choose, all of them (setup installs what's missing). */
 function chosen() {
-  return readChoice() ?? IDS.filter((id) => find(id));
+  return readChoice() ?? [...IDS];
 }
 
 function hasChosen() {
@@ -245,12 +245,45 @@ function quote(s) {
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`;
 }
 
+/** Written when the sign-in terminal's command finishes, so setup knows to move on. */
+function loginDoneFile(id) {
+  return path.join(DIR, `signin-${id}.done`);
+}
+
 /** The shell line that signs in to an agent, run in a terminal. */
 function loginShellLine(id) {
   const t = TOOLS[id];
   const bin = find(id) || t.bin;
   const run = [bin, ...t.login.slice(1)].map(quote).join(' ');
-  return `export PATH="$HOME/.local/bin:$PATH"; echo ${quote(`Limitty: signing in to ${t.name}. ${t.loginHint}`)}; echo; ${run}; echo; read -r -p "Done. Press Enter to close this window." _`;
+  const done = quote(loginDoneFile(id));
+  return `export PATH="$HOME/.local/bin:$PATH"; echo ${quote(`Limitty: signing in to ${t.name}. ${t.loginHint}`)}; echo; ${run}; mkdir -p ${quote(DIR)}; touch ${done}; echo; read -r -t 15 -p "Done. This window closes in 15 seconds." _`;
+}
+
+/**
+ * Opens the sign-in terminal and waits until you've signed in (or closed it).
+ * Returns { promise: Promise<'signed-in'|'closed'|'skipped'|'timeout'|'no-terminal'>, skip, command }.
+ */
+function signIn(id, { openImpl = openLogin, timeoutMs = 15 * 60_000, pollMs = 1000 } = {}) {
+  const t = TOOLS[id];
+  const doneFile = loginDoneFile(id);
+  fs.mkdirSync(DIR, { recursive: true });
+  fs.rmSync(doneFile, { force: true });
+  const opened = openImpl(id);
+  let finish;
+  const promise = new Promise((resolve) => { finish = resolve; });
+  if (!opened.ok) { finish('no-terminal'); return { promise, skip: () => {}, command: opened.command }; }
+  const started = Date.now();
+  const timer = setInterval(() => {
+    if (t.signedIn() === true) done('signed-in');
+    else if (fs.existsSync(doneFile)) done(t.signedIn() === false ? 'closed' : 'signed-in');
+    else if (Date.now() - started > timeoutMs) done('timeout');
+  }, pollMs);
+  function done(r) {
+    clearInterval(timer);
+    fs.rmSync(doneFile, { force: true });
+    finish(r);
+  }
+  return { promise, skip: () => done('skipped'), command: opened.command };
 }
 
 /** Opens a terminal that signs in to the agent. Returns { ok, command } (command = what to run yourself if no terminal was found). */
@@ -273,5 +306,5 @@ function openLogin(id, { spawnImpl = spawn } = {}) {
 module.exports = {
   TOOLS, IDS, LOCAL_BIN, CHOICE_FILE,
   ensurePath, find, status, chosen, hasChosen, isChosen, choose,
-  install, openLogin, terminalCommand, loginShellLine,
+  install, openLogin, signIn, loginDoneFile, terminalCommand, loginShellLine,
 };

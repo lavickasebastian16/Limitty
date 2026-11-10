@@ -120,7 +120,18 @@ async function readFile(token, gistId, name, fetchImpl) {
   try { return JSON.parse(f.content); } catch { return null; }
 }
 
+/** Every file in the Gist, parsed (one request). */
+async function readFiles(token, gistId, fetchImpl) {
+  const gist = await api(token, fetchImpl)('GET', `/gists/${gistId}`);
+  const out = {};
+  for (const [name, f] of Object.entries(gist.files || {})) {
+    if (!f?.content) continue;
+    try { out[name] = JSON.parse(f.content); } catch { /* skip */ }
+  }
+  return out;
+}
+
 const TASKS_FILE = 'limitty-tasks.json'; // written by the PC
 const INBOX_FILE = 'limitty-inbox.json'; // written by the phone
 
-module.exports = { CLIENT_ID, STATUS_FILE, TASKS_FILE, INBOX_FILE, deviceLogin, whoami, findOrCreateGist, writeStatus, writeFiles, readFile, GitHubError };
+module.exports = { CLIENT_ID, STATUS_FILE, TASKS_FILE, INBOX_FILE, deviceLogin, whoami, findOrCreateGist, writeStatus, writeFiles, readFile, readFiles, GitHubError };
