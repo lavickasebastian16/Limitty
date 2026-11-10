@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Limitty Settings</title>
+  <link rel="stylesheet" href="../company-window/style.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Settings</h1>
+      <p class="sub">Everything saves as you change it.</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>Agents</h2>
+    <div class="row between">
+      <div id="agentsSummary" class="muted">…</div>
+      <button id="openAgents" class="ghost small">Install or change agents…</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>The CEO</h2>
+    <p class="muted">Reads each task, splits it by what each agent is good at, and picks the model for each part.</p>
+    <label class="field">Who plans
+      <select id="ceo">
+        <option value="claude">Claude Code</option>
+        <option value="codex">Codex</option>
+        <option value="agy">Antigravity</option>
+        <option value="rules">No AI: give the whole task to the agent with the most limit left</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>What each agent is good at</h2>
+    <p class="muted">The CEO gives each part of a task to the agent whose strengths fit it best. Change these to steer it. Leave a box empty to use the default.</p>
+    <div id="strengths"></div>
+  </section>
+
+  <section class="card">
+    <h2>Permissions</h2>
+    <label class="check"><input type="checkbox" id="allowCommands"> Let Claude Code run shell commands (tests, builds, git) while it works</label>
+    <p class="muted">Codex runs in its own sandboxed auto mode. Every agent works directly in your project folder, so use git to review or undo changes.</p>
+  </section>
+
+  <section class="card">
+    <h2>Antigravity models</h2>
+    <p class="muted">Lets the CEO pick Gemini Pro for hard parts and Flash for quick ones. Without these, Antigravity uses its default model.</p>
+    <div class="row">
+      <label class="field grow">Pro <input id="agyPro" placeholder="e.g. gemini-3-pro"></label>
+      <label class="field grow">Flash <input id="agyFlash" placeholder="e.g. gemini-3-flash"></label>
+      <button id="detectAgy" class="ghost small">Detect</button>
+    </div>
+    <p id="agyNote" class="muted"></p>
+  </section>
+
+  <section class="card">
+    <h2>iPhone</h2>
+    <div class="row between">
+      <div id="phoneStatus" class="muted">…</div>
+      <button id="phoneButton" class="small">Link iPhone…</button>
+    </div>
+    <label class="check"><input type="checkbox" id="alertOnFinish"> Alert me when an agent finishes, not only when it needs me</label>
+    <label class="check"><input type="checkbox" id="showProjectNames"> Show project names in alerts</label>
+  </section>
+
+  <section class="card">
+    <h2>Widget</h2>
+    <label class="field">Refresh limits every
+      <select id="refreshMinutes"><option value="1">1 min</option><option value="2">2 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="15">15 min</option><option value="30">30 min</option></select>
+    </label>
+    <label class="check"><input type="checkbox" id="alwaysOnTop"> Keep the widget above other windows</label>
+    <label class="check"><input type="checkbox" id="startAtLogin"> Start Limitty when I log in</label>
+  </section>
+
+  <p id="saved" class="saved" hidden>Saved ✓</p>
+  <footer id="version" class="note"></footer>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -24,6 +24,14 @@
         <svg viewBox="0 0 16 16" width="13" height="13"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
       </button>
     </header>
+    <form id="ask" class="ask" autocomplete="off">
+      <textarea id="askText" rows="1" placeholder="Tell your agents what to do…" aria-label="Task for your agents"></textarea>
+      <div class="ask-row">
+        <select id="askProject" aria-label="Project"></select>
+        <span id="askStatus" class="ask-status"></span>
+        <button type="submit" id="askSend" title="Send to the CEO (Enter)">Send</button>
+      </div>
+    </form>
     <section id="providers"><div class="empty">Loading limits…</div></section>
   </main>
   <script src="render.js"></script>

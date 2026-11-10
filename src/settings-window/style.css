@@ -1,0 +1,18 @@
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
+.card h2 { font-size: 14px; margin: 0 0 4px; }
+.muted { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+.row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.row.between { justify-content: space-between; align-items: center; }
+.row .muted { margin: 0; }
+.field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; color: var(--muted); font-size: 12px; margin: 6px 0; }
+.field.grow { flex: 1; min-width: 150px; }
+.field select { max-width: none; }
+input[type=text], .field input, .strength textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+.strength { display: grid; grid-template-columns: 110px 1fr; gap: 8px; align-items: start; margin: 6px 0; }
+.strength .who { font-weight: 600; padding-top: 5px; display: flex; align-items: center; gap: 2px; }
+.strength textarea { resize: vertical; min-height: 34px; width: 100%; box-sizing: border-box; }
+.check { display: flex; gap: 8px; align-items: flex-start; color: var(--text); margin: 6px 0; cursor: pointer; }
+.check input { margin-top: 2px; accent-color: var(--accent); }
+.saved { position: fixed; bottom: 14px; right: 18px; background: var(--ok); color: #fff; border-radius: 999px; padding: 4px 12px; font-size: 12px; font-weight: 600; margin: 0; }
+pre.out { max-height: 140px; }
+.strength .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }

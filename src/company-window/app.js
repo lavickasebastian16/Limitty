@@ -55,6 +55,7 @@ function renderTasks() {
       return `<li class="step">
         <div class="step-head"><span class="badge"><span class="dot ${s.worker}"></span>${NAMES[s.worker]}${MODEL_LABELS[s.model] ? ` · ${MODEL_LABELS[s.model]}` : ''}${t.plan.by === s.worker ? ' <b class="ceo">CEO</b>' : ''}</span>
           <span>${esc(s.title)}</span><span class="step-status ${s.status}">${st}</span></div>
+        ${s.why ? `<div class="why">Why ${NAMES[s.worker]}: ${esc(s.why)}</div>` : ''}
         ${s.output ? `<details data-key="${key}" ${openOutputs.has(key) ? 'open' : ''}><summary>Output</summary><pre>${esc(s.output)}</pre></details>` : ''}
       </li>`;
     }).join('');

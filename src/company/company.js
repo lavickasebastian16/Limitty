@@ -178,7 +178,7 @@ class Company extends EventEmitter {
       v: 1,
       projects: this.projects().map((p) => ({ name: p.name })),
       workers: Object.fromEntries(Object.entries(WORKERS).map(([id, w]) => [id, {
-        name: w.name, available: team[id].available, busy: team[id].busy, remaining: team[id].remaining,
+        name: w.name, strengths: team[id].strengths, available: team[id].available, busy: team[id].busy, remaining: team[id].remaining,
         models: team[id].models.map((m) => ({ id: m.id, label: m.label, tier: m.tier, remaining: m.remaining })),
       }])),
       ceo: this.ceo,
@@ -197,7 +197,7 @@ class Company extends EventEmitter {
           by: t.plan.by,
           steps: t.plan.steps.map((s) => ({
             worker: s.worker, model: s.model || null, modelLabel: modelLabel(s.worker, s.model, this.workerOptions),
-            title: s.title, status: s.status,
+            title: s.title, why: s.why || null, status: s.status,
             output: (s.output || '').slice(-1500),
             startedAt: s.startedAt && Math.round(s.startedAt / 1000),
             finishedAt: s.finishedAt && Math.round(s.finishedAt / 1000),
@@ -229,6 +229,8 @@ class Company extends EventEmitter {
       });
       const roomy = models.some((m) => m.remaining == null || m.remaining > 1);
       return [id, {
+        name: WORKERS[id].name,
+        strengths: this.workerOptions.strengths?.[id]?.trim() || WORKERS[id].strengths,
         available: this.installed(id) && (l.overall == null || l.overall > 1) && roomy,
         busy: this.busyWorkers.has(id),
         remaining: l.overall,

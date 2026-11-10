@@ -26,6 +26,7 @@ const VERSION = (() => { try { return require('../limitty.json').version; } catc
 let host = null; // runs the Company + phone relay (or { owner: false } if another process does)
 let companyWin = null;
 let agentsWin = null;
+let settingsWin = null;
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
@@ -95,38 +96,16 @@ function buildTrayMenu() {
     { type: 'separator' },
     ...summary,
     ...(summary.length ? [{ type: 'separator' }] : []),
+    { label: 'Type a task for your agents…', click: focusAsk },
+    { label: 'Company: tasks and progress…', click: openCompany },
+    { type: 'separator' },
     { label: win?.isVisible() ? 'Hide widget' : 'Show widget', click: toggleWindow },
     { label: 'Refresh now', click: refresh },
-    {
-      label: 'Always on top',
-      type: 'checkbox',
-      checked: config.alwaysOnTop,
-      click: (item) => {
-        config.alwaysOnTop = item.checked;
-        win?.setAlwaysOnTop(item.checked);
-        saveConfig();
-      },
-    },
-    {
-      label: 'Refresh every',
-      submenu: [1, 2, 5, 10, 15, 30].map((m) => ({
-        label: `${m} min`,
-        type: 'radio',
-        checked: config.refreshMinutes === m,
-        click: () => { config.refreshMinutes = m; saveConfig(); schedule(); },
-      })),
-    },
-    { label: 'Choose agents…', click: openAgents },
-    {
-      label: 'Start at login',
-      type: 'checkbox',
-      checked: getStartAtLogin(),
-      click: (item) => setStartAtLogin(item.checked),
-    },
     { label: 'Reset position', click: () => { config.x = null; config.y = null; saveConfig(); placeDefault(); } },
     { type: 'separator' },
-    { label: 'Company: tasks for your agents…', click: openCompany },
+    { label: 'Agents: install and sign in…', click: openAgents },
     agentsMenuItem(),
+    { label: 'Settings…', click: openSettings },
     { type: 'separator' },
     { label: 'Quit Limitty', click: () => app.quit() },
   ]);
@@ -403,6 +382,60 @@ function setupAgentsIpc() {
   ipcMain.on('window:agents', openAgents);
 }
 
+// ───── Settings window ─────
+
+function openSettings() {
+  if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
+  settingsWin = new BrowserWindow({
+    width: 660,
+    height: 760,
+    minWidth: 480,
+    minHeight: 420,
+    title: 'Limitty Settings',
+    webPreferences: { preload: path.join(__dirname, 'settings-window', 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  settingsWin.setMenuBarVisibility(false);
+  settingsWin.loadFile(path.join(__dirname, 'settings-window', 'index.html'));
+  settingsWin.on('closed', () => { settingsWin = null; });
+}
+
+function settingsState() {
+  return {
+    ...require('./settings').read(),
+    refreshMinutes: config.refreshMinutes,
+    alwaysOnTop: config.alwaysOnTop,
+    startAtLogin: getStartAtLogin(),
+    agents: tools.status(),
+    version: VERSION,
+  };
+}
+
+function pushSettingsState() {
+  settingsWin?.webContents.send('settings:update', settingsState());
+}
+
+function setupSettingsIpc() {
+  ipcMain.handle('settings:get', () => settingsState());
+  ipcMain.handle('settings:set', (_e, patch = {}) => {
+    require('./settings').write(patch);
+    host?.applyConfig?.(); // also picked up by the background agent if it runs the Company
+    if ([1, 2, 5, 10, 15, 30].includes(patch.refreshMinutes)) { config.refreshMinutes = patch.refreshMinutes; saveConfig(); schedule(); }
+    if (typeof patch.alwaysOnTop === 'boolean') { config.alwaysOnTop = patch.alwaysOnTop; saveConfig(); win?.setAlwaysOnTop(patch.alwaysOnTop); }
+    if (typeof patch.startAtLogin === 'boolean') setStartAtLogin(patch.startAtLogin);
+    updateTray();
+    return settingsState();
+  });
+  ipcMain.handle('settings:detectAgy', () => require('./settings').detectAgyModels());
+  ipcMain.handle('settings:linkPhone', async () => { await connectAgents(); return settingsState(); });
+  ipcMain.handle('settings:unlinkPhone', () => {
+    require('./agents/connect').disconnect();
+    host?.detachRelay?.();
+    updateTray();
+    return settingsState();
+  });
+  ipcMain.on('window:settings', openSettings);
+}
+
 // ───── Company window ─────
 
 function openCompany() {
@@ -431,6 +464,45 @@ function companyState() {
 
 function pushCompanyState() {
   companyWin?.webContents.send('company:update', companyState());
+  win?.webContents.send('ask:info', askInfo());
+}
+
+// ───── Prompt box in the widget ─────
+
+function askInfo() {
+  const st = companyState();
+  const projects = ((st.owner ? st.projects : st.allProjects || st.projects) || []).map((p) => p.name);
+  const active = (st.tasks || []).filter((t) => ['queued', 'planning', 'running'].includes(t.status)).length;
+  return { projects, lastProject: projects.includes(config.lastProject) ? config.lastProject : projects[0] || null, active };
+}
+
+async function askSend(req) {
+  if (req?.addProject) {
+    const r = await dialog.showOpenDialog(win, { title: 'Choose a project folder', properties: ['openDirectory'] });
+    if (r.canceled || !r.filePaths[0]) return { info: askInfo() };
+    companyRequest({ kind: 'addProject', path: r.filePaths[0] });
+    await new Promise((res) => setTimeout(res, 400));
+    return { info: askInfo(), added: path.basename(r.filePaths[0]) };
+  }
+  const title = String(req?.title || '').trim();
+  if (!title) return { ok: false, error: 'Type what you want done.', info: askInfo() };
+  if (!tools.chosen().some((id) => tools.find(id))) {
+    openAgents();
+    return { ok: false, error: 'Install an agent first.', info: askInfo() };
+  }
+  config.lastProject = req.project;
+  saveConfig();
+  companyRequest({ kind: 'create', title, project: req.project, worker: 'auto' });
+  await new Promise((res) => setTimeout(res, 400));
+  return { ok: true, info: askInfo() };
+}
+
+function focusAsk() {
+  if (!win) return;
+  win.show();
+  win.focus();
+  win.webContents.send('ask:focus');
+  updateTray();
 }
 
 /** Do it here if we run the Company, otherwise hand it to the process that does. */
@@ -524,11 +596,15 @@ function setStartAtLogin(on) {
 //   limitty --company   open the Company window
 //   limitty --toggle    show/hide the widget
 //   limitty --agents    choose, install and sign in to your agents
+//   limitty --prompt    show the widget and type a task for your agents
+//   limitty --settings  open Settings
 //   limitty --waybar    print usage limits as Waybar JSON and exit
 
 function handleArgs(argv) {
   if (argv.includes('--company')) openCompany();
   else if (argv.includes('--agents')) openAgents();
+  else if (argv.includes('--prompt')) focusAsk();
+  else if (argv.includes('--settings')) openSettings();
   else if (argv.includes('--toggle')) toggleWindow();
   else if (win) win.showInactive();
 }
@@ -565,14 +641,19 @@ if (process.argv.includes('--waybar')) {
     ipcMain.on('window:hide', () => { win?.hide(); updateTray(); });
     ipcMain.on('window:menu', () => buildTrayMenu().popup({ window: win }));
     ipcMain.on('window:company', openCompany);
+    ipcMain.handle('ask:info', () => askInfo());
+    ipcMain.handle('ask:send', (_e, req) => askSend(req));
     setupCompanyIpc();
     setupAgentsIpc();
+    setupSettingsIpc();
 
     win.webContents.once('did-finish-load', refresh);
     schedule();
 
     startHost();
     if (process.argv.includes('--company')) openCompany();
+    if (process.argv.includes('--prompt')) win.webContents.once('did-finish-load', focusAsk);
+    if (process.argv.includes('--settings')) openSettings();
     // First launch: pick your agents (and install any that are missing).
     if (process.argv.includes('--agents') || !tools.hasChosen()) openAgents();
   });

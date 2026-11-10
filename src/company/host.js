@@ -42,6 +42,22 @@ function startHost({ log = () => {} } = {}) {
     },
   };
   host.attachRelay();
+
+  // Settings changed (Settings window, CLI or by hand): use them right away.
+  host.applyConfig = () => {
+    const c = config.load() || {};
+    company.ceo = c.ceo || 'claude';
+    company.workerOptions = c.workers || {};
+    require('./workers').isInstalled.clearCache?.();
+    if (host.daemon) {
+      for (const k of ['alertOnFinish', 'showProjectNames']) if (k in c) host.daemon.cfg[k] = c[k];
+    }
+    company.changed();
+  };
+  const onConfig = () => host.applyConfig();
+  fs.watchFile(config.FILES.config, { interval: 1500 }, onConfig);
+  const stop = host.stop;
+  host.stop = () => { fs.unwatchFile(config.FILES.config, onConfig); stop(); };
   return host;
 }
 

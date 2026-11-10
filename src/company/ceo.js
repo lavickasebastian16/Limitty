@@ -7,7 +7,7 @@
 const fs = require('fs');
 const { WORKERS, run } = require('./workers');
 
-const MAX_STEPS = 4;
+const MAX_STEPS = 6;
 const LOW_LIMIT = 15; // % left below which a model is avoided if possible
 const TIER_ORDER = { strongest: 0, balanced: 1, fast: 2 };
 
@@ -22,7 +22,7 @@ function describeTeam(team, ceo) {
     if (!t.available) return `- ${id} (${w.name}): NOT AVAILABLE${me}`;
     const models = (t.models || []).map((m) => `${m.id} [${m.tier}${m.remaining == null ? '' : `, ${Math.round(m.remaining)}% left`}]`).join(', ');
     const left = t.remaining == null ? 'limit unknown' : `${Math.round(t.remaining)}% of its usage limit left`;
-    return `- ${id} (${w.name})${me}: ${left}${t.busy ? ', currently busy' : ''}. Good at ${w.strengths}. Models: ${models}.`;
+    return `- ${id} (${w.name})${me}: ${left}${t.busy ? ', currently busy' : ''}. Good at: ${t.strengths || w.strengths}. Models: ${models}.`;
   }).join('\n');
 }
 
@@ -49,16 +49,18 @@ Team (usage limits are live):
 ${describeTeam(team, ceo)}
 
 Rules:
-- Use ONE step unless the task clearly has separate parts; never more than ${MAX_STEPS} steps.
+- Split the task into parts by what each worker is best at (their "Good at" above), and give every part to the worker whose strengths fit it best. The split does NOT have to be even: one worker may get most of the work and another none. Never add steps just to keep someone busy.
+- A small or single-topic task is ONE step. Use more steps only when the parts really need different strengths (for example UI work, backend logic, tests, review). Never more than ${MAX_STEPS} steps.
+- For bigger changes, end with a short review or test step by a different worker than the one that wrote most of the code.
 - Steps run in order, in the project folder; each worker sees the results of earlier steps.
 - Only assign available workers and models from their list.
 - Match the model to the work: "strongest" for hard design, tricky bugs or large refactors; "balanced" for normal coding; "fast" for small edits, docs, formatting or simple questions. Don't use a stronger model than the step needs.
-- Spread work by usage limits: prefer workers and models with more limit left, and avoid any model under ${LOW_LIMIT}% left unless nothing else can do it.
+- Usage limits: if two workers fit a part about equally well, pick the one with more limit left. Avoid any model under ${LOW_LIMIT}% left unless nothing else can do it.
 - Each instruction must be complete and self-contained: the worker sees only that instruction and earlier results.
 - You may look at files to plan, but do not change anything now.
 
 Reply with ONLY this JSON, nothing else:
-{"summary": "one sentence plan, including why these workers/models", "steps": [{"worker": "claude|codex|agy", "model": "model id from the list", "title": "short step name", "instruction": "full instruction"}]}`;
+{"summary": "one sentence plan", "steps": [{"worker": "claude|codex|agy", "model": "model id from the list", "title": "short step name", "why": "which strength of this worker fits this part (a few words)", "instruction": "full instruction"}]}`;
 }
 
 /** The model to use when none (or an invalid one) was chosen: balanced if it has room, else the roomiest. */
@@ -86,7 +88,8 @@ function parsePlan(text, team) {
       const worker = available.includes(st.worker) ? st.worker : pickWorker(team);
       const models = team[worker]?.models || [];
       const model = models.some((m) => m.id === st.model) ? st.model : pickModel(team[worker]);
-      return { worker, model, title: String(st.title || st.instruction).slice(0, 80), instruction: st.instruction.trim() };
+      const why = worker === st.worker && typeof st.why === 'string' ? st.why.trim().slice(0, 120) : '';
+      return { worker, model, title: String(st.title || st.instruction).slice(0, 80), why, instruction: st.instruction.trim() };
     });
   if (!steps.length) return null;
   return { summary: String(j.summary || '').slice(0, 400), steps };

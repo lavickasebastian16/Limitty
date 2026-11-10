@@ -154,6 +154,9 @@ struct TaskDetailView: View {
                                 Text(step.status).font(.caption).foregroundStyle(.secondary)
                             }
                             Text(step.title).font(.footnote)
+                            if let why = step.why, !why.isEmpty {
+                                Text("Why \(workerName(step.worker)): \(why)").font(.caption).italic().foregroundStyle(.secondary)
+                            }
                             if let out = step.output, !out.isEmpty {
                                 Text(out)
                                     .font(.system(.caption, design: .monospaced))

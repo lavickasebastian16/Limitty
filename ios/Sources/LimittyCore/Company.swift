@@ -18,6 +18,7 @@ public struct CompanyState: Codable, Hashable, Sendable {
     }
     public struct Worker: Codable, Hashable, Sendable {
         public var name: String
+        public var strengths: String?
         public var available: Bool
         public var busy: Bool
         public var remaining: Double?
@@ -45,6 +46,8 @@ public struct CompanyTask: Codable, Hashable, Identifiable, Sendable {
         public var model: String?
         public var modelLabel: String?
         public var title: String
+        /// Which of the worker's strengths the CEO matched to this step.
+        public var why: String?
         public var status: String
         public var output: String?
         public var startedAt: Double?

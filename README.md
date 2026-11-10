@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.02.001**
+**Version 1.03.000**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/L
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.02.001.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.02.001-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.02.001-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.03.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.03.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.03.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -59,32 +59,43 @@ See whether each agent on your PC is **working**, **needs you** (a permission pr
 Status is stored in a **private Gist** on your GitHub account. Limitty only asks for Gist access. More details are below under [How agent status works](#how-agent-status-works).
 
 
-## 🏢 Company: give tasks to your agents
+## 🏢 Company: one prompt, your agents split the work
 
-Run your agents like a small company:
-- **You** give a task, from the iPhone (**Tasks → New task**), the desktop app (the briefcase button → **Company** window), or a terminal (`node src/agents/cli.js task "…" --in <folder>`).
-- **The CEO** (Claude Code by default) reads the task. It splits the task into up to 4 steps if useful, and gives each step to the best worker **and model**. The CEO is on the team too, and takes steps itself when it's the best fit (marked **CEO**).
-- **Model choice** matches the work to the model, using live usage limits for each model:
-  - **Claude Code:** Opus for hard design or tricky bugs, Sonnet for normal coding, Haiku for small edits and docs.
+Type one task and your agents handle it like a small company:
+- **You prompt once:**
+  - **On the PC:** type into the box at the top of the widget and press Enter. You can also use `limitty --prompt` (bind it to a key) or the Company window (the briefcase button).
+  - **On the iPhone:** **Tasks → New task**.
+  - **From a terminal:** `node src/agents/cli.js task "…" --in <folder>`.
+- **The CEO** (Claude Code by default) splits the task by **what each agent is good at**, not evenly:
+  - Antigravity might get the UI, Codex the API and tests, and Claude Code the tricky logic or a final review.
+  - A small task goes to one agent.
+  - Each step shows **why** that agent got it.
+  - The CEO can take parts itself (marked **CEO**).
+- **Model choice** matches each part to a model, using live usage limits:
+  - **Claude Code:** Opus for hard parts, Sonnet for normal coding, Haiku for small edits.
   - **Codex:** high, medium or low reasoning effort.
   - **Antigravity:** Gemini Pro or Flash.
-  - It uses Claude's separate weekly Opus and Sonnet limits and the Gemini Pro and Flash quotas, and avoids any model under 15% left unless nothing else fits.
-- **The workers** (Claude Code, Codex, Antigravity) carry out the steps in order, in your project folder. Each step sees the results of the earlier ones.
-- You follow progress, the CEO's plan, and each worker's output on the phone or PC. You get a push alert when a task is done or fails, and you can cancel or rerun any task.
+  - If two agents fit equally well, the one with more limit left gets it. Models under 15% left are avoided.
+- **The agents** do their parts in order, in your project folder. Each sees the earlier results.
+- **You follow along** on the PC or phone: the plan, each agent's output, and an alert when the task is done or fails. You can cancel, rerun or remove any task from either one.
 
 Details:
-- **Workers edit your project directly.** They can change files and run commands there:
-  - Claude runs with `--permission-mode acceptEdits` and shell commands allowed.
-  - Codex runs with `--full-auto` (its workspace sandbox).
-  - agy runs with `-p`.
-  - Use git so you can review or undo their changes.
-- **Projects:** add folders with **Add folder…** in the Company window. Folders your agents worked in recently show up too.
-- **Which process runs it:** the desktop app or the background agent (`npm run agent`), whichever starts first; the other just shows the tasks. Tasks from the phone go through the same private GitHub Gist as agent status, so they need GitHub sign-in.
-- **CEO choice:** set `"ceo": "codex"`, `"agy"` or `"rules"` in `~/.limitty/agent.json`. `"rules"` uses no AI: it picks the free worker with the most limit left, and a balanced model with room left. Planning itself uses the CEO's balanced model (for example Sonnet) to save its limit.
-- **Settings** in `~/.limitty/agent.json` → `"workers"`:
-  - `"allowCommands": false` stops Claude workers from running shell commands.
-  - `"agyModels": { "pro": "…", "flash": "…" }` turns on Gemini Pro or Flash choice for agy. Use the slugs `agy models` shows. agy's `--model` flag differs between versions, so it's off until you set this.
-- **Limits:** a task that's running when Limitty or the PC stops is marked as interrupted; use **Run again**. Each step stops after 45 minutes.
+- **Agents edit your project directly**, like when you run them yourself. Use git so you can review or undo their changes.
+- **Projects:** pick or add a folder in the prompt box or the Company window. Folders your agents worked in recently show up too.
+- **Phone tasks** go through your private GitHub Gist, so the phone and PC need to be linked (Settings → iPhone). Your PC picks them up within about 15 seconds.
+- **Interrupted tasks:** a task running when Limitty or the PC stops is marked failed; use **Run again**. Each step stops after 45 minutes.
+
+## ⚙️ Settings
+
+Open Settings from the menu (⋯) → **Settings…**, or run `limitty --settings`. Everything saves as you change it, and applies right away:
+- **The CEO:** Claude Code, Codex, Antigravity, or no AI (the whole task goes to the agent with the most limit left).
+- **What each agent is good at:** edit these to steer how work is split.
+- **Permissions:** whether Claude Code may run shell commands.
+- **Antigravity models:** **Detect** fills in the Pro and Flash names from `agy models`.
+- **iPhone:** link or unlink it, and choose whether to be alerted when an agent finishes.
+- **Widget:** refresh interval, keep on top, start at login.
+
+They're stored in `~/.limitty/agent.json`, so the background agent and the CLI use the same settings.
 
 ## 🖥️ Desktop widget (Claude + Codex + agy)
 
@@ -155,7 +166,7 @@ The script:
 2. Adds **Hyprland window rules** (`~/.config/hypr/limitty.conf`, or `limitty.lua` if you use `hyprland.lua`). The widget floats top-right, is pinned on every workspace, has no border or shadow, and doesn't steal focus. It also starts Limitty with Hyprland.
 3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget; right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
 
-Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents` (setup), `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
+Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents` (setup), `limitty --prompt` (type a task), `limitty --settings`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
 
 ## 🔢 Versions
 

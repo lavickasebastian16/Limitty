@@ -14,12 +14,19 @@ hl.window_rule({
   no_blur = true,
 })
 
--- The Company window: a normal floating window.
+-- The Company, Agents and Settings windows: normal floating windows.
 hl.window_rule({
   name = "limitty-company",
   match = { title = "^Limitty Company$" },
   float = true,
   size = { 820, 760 },
+  center = true,
+})
+hl.window_rule({
+  name = "limitty-setup",
+  match = { title = "^Limitty (Agents|Settings)$" },
+  float = true,
+  size = { 660, 760 },
   center = true,
 })
 

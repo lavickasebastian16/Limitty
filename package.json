@@ -1,6 +1,6 @@
 {
   "name": "limitty",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "description": "Claude, Codex and Antigravity (agy) usage limits and agent status: desktop widget, iPhone app, and a PC companion.",
   "main": "src/main.js",
   "license": "MIT",

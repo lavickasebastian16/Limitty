@@ -103,3 +103,20 @@ html, body {
 .error strong { color: var(--bad); font-weight: 600; }
 .hint { color: var(--muted); font-size: 10.5px; margin-top: 2px; }
 .empty { color: var(--muted); padding: 10px 0; }
+
+/* Prompt box: one task for your agents; the CEO splits it. */
+.ask { margin: 2px 0 8px; display: grid; gap: 5px; }
+.ask textarea { width: 100%; box-sizing: border-box; resize: none; font: inherit; font-size: 12px; color: var(--text);
+  background: var(--track); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-height: 30px; max-height: 120px; outline: none; }
+.ask textarea:focus { border-color: var(--claude); }
+.ask-row { display: none; gap: 6px; align-items: center; }
+.ask.open .ask-row { display: flex; }
+.ask select { flex: 0 1 auto; max-width: 130px; font: inherit; font-size: 11px; color: var(--text); background: var(--track);
+  border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+.ask-status { flex: 1; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ask-status.err { color: var(--bad); }
+.ask-status.ok { color: var(--ok); }
+.ask button { font: inherit; font-size: 11px; font-weight: 600; border: 0; border-radius: 6px; padding: 3px 10px; background: var(--claude); color: #fff; cursor: pointer; }
+.ask button:disabled { opacity: .5; cursor: default; }
+.tasks-line { color: var(--muted); font-size: 10.5px; margin: -4px 0 6px; cursor: pointer; }
+.tasks-line:hover { color: var(--text); }
