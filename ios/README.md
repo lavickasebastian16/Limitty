@@ -53,7 +53,7 @@ Follow xtool's [Linux/Windows install guide](https://github.com/xtool-org/xtool/
 
 ```bash
 git clone https://github.com/lavickasebastian16/limitty.git
-cd Limitty/ios
+cd limitty/ios
 xtool dev
 ```
 

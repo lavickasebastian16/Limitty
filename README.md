@@ -119,7 +119,7 @@ You need [Node.js](https://nodejs.org) 18 or newer.
 
 ```bash
 git clone https://github.com/lavickasebastian16/limitty.git
-cd Limitty
+cd limitty
 npm install
 npm start          # opens the widget (top-right corner)
 ```
