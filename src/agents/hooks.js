@@ -8,16 +8,48 @@ const os = require('os');
 const path = require('path');
 
 const MARK = '--limitty-hook';
-const CLI = path.join(__dirname, 'cli.js');
+const HOOK_SOURCE = path.join(__dirname, 'hook.js');
 
 /** Forward slashes work everywhere (Node accepts them on Windows) and survive any shell. */
 const slash = (p) => p.split(path.sep).join('/');
 
+/** Where the agents run the hook from: a copy outside the app, so the path never changes. */
+function hookScriptPath() {
+  return path.join(require('./config').FILES.dir, 'hook.js');
+}
+
+/** Copies the hook script into ~/.limitty (on every install and app start, so updates reach it). */
+function ensureHookScript() {
+  const dest = hookScriptPath();
+  const code = fs.readFileSync(HOOK_SOURCE, 'utf8'); // also works from inside the app's .asar archive
+  let current = null;
+  try { current = fs.readFileSync(dest, 'utf8'); } catch { /* not there yet */ }
+  if (current !== code) {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, code);
+  }
+  return dest;
+}
+
+/**
+ * The program that runs the hook script. Plain Node when Limitty runs from source.
+ * The desktop app is Electron: it runs scripts as Node when ELECTRON_RUN_AS_NODE=1
+ * is set. For an AppImage, use the AppImage file itself, since its inside path moves
+ * on every start.
+ */
+function runtime() {
+  if (process.versions.electron && process.platform !== 'win32') {
+    return ['/usr/bin/env', 'ELECTRON_RUN_AS_NODE=1', slash(process.env.APPIMAGE || process.execPath)];
+  }
+  return [slash(process.execPath)];
+}
+
+function hookArgv(agent, event) {
+  return [...runtime(), slash(hookScriptPath()), agent, ...(event ? [event] : []), MARK];
+}
+
 function hookCommand(agent, event) {
-  const parts = [`"${slash(process.execPath)}"`, `"${slash(CLI)}"`, 'hook', agent];
-  if (event) parts.push(event);
-  parts.push(MARK);
-  return parts.join(' ');
+  return hookArgv(agent, event).map((a) => `"${a}"`).join(' ');
 }
 
 function readJson(file) {
@@ -57,6 +89,7 @@ function stripClaude(settings) {
 }
 
 function installClaude(file = claudeSettingsPath()) {
+  ensureHookScript();
   const settings = stripClaude(readJson(file));
   settings.hooks = settings.hooks || {};
   for (const ev of CLAUDE_EVENTS) {
@@ -83,6 +116,7 @@ function agyHooksPath() {
 }
 
 function installAgy(file = agyHooksPath()) {
+  ensureHookScript();
   const cfg = readJson(file);
   const group = { enabled: true };
   for (const ev of AGY_EVENTS) {
@@ -109,12 +143,12 @@ function codexConfigPath() {
 }
 
 function codexNotifyLine() {
-  const args = [slash(process.execPath), slash(CLI), 'hook', 'codex', MARK].map((a) => JSON.stringify(a));
-  return `notify = [${args.join(', ')}]`;
+  return `notify = [${hookArgv('codex').map((a) => JSON.stringify(a)).join(', ')}]`;
 }
 
 /** Returns { file, status: 'installed' | 'already' | 'conflict', line }. */
 function installCodex(file = codexConfigPath()) {
+  ensureHookScript();
   const line = codexNotifyLine();
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { /* new file */ }
@@ -146,6 +180,6 @@ function uninstallCodex(file = codexConfigPath()) {
 }
 
 module.exports = {
-  MARK, hookCommand, installClaude, uninstallClaude, installAgy, uninstallAgy, installCodex, uninstallCodex,
+  MARK, hookCommand, hookArgv, ensureHookScript, hookScriptPath, installClaude, uninstallClaude, installAgy, uninstallAgy, installCodex, uninstallCodex,
   claudeSettingsPath, agyHooksPath, codexConfigPath, CLAUDE_EVENTS, AGY_EVENTS,
 };

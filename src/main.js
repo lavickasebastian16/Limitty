@@ -651,6 +651,11 @@ if (process.argv.includes('--waybar')) {
     schedule();
 
     startHost();
+    // Hooks from an older version (or a moved AppImage) point at the wrong place: fix them.
+    try {
+      const fixed = require('./agents/connect').repairHooks();
+      if (fixed.length) console.log(`[agent] updated hooks: ${fixed.join(', ')}`);
+    } catch (e) { console.error('[agent] hook repair:', e.message); }
     if (process.argv.includes('--company')) openCompany();
     if (process.argv.includes('--prompt')) win.webContents.once('did-finish-load', focusAsk);
     if (process.argv.includes('--settings')) openSettings();

@@ -7,5 +7,6 @@
   "interval": 60,
   "tooltip": true,
   "on-click": "limitty --toggle",
-  "on-click-right": "limitty --company"
+  "on-click-right": "limitty --company",
+  "on-click-middle": "limitty --prompt"
 }

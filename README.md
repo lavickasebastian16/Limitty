@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.03.000**
+**Version 1.03.001**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/L
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.03.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.03.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.03.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.03.001.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.03.001-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.03.001-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -52,7 +52,7 @@ Rather not set up xtool? [`scriptable/`](scriptable/README.md) has a lighter wid
 
 See whether each agent on your PC is **working**, **needs you** (a permission prompt or question), or **idle**, and get a push alert when one needs you or finishes. You link the PC and phone by **signing in with the same GitHub account** on both.
 
-1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…**, then enter the code shown on GitHub's page. This installs the agent hooks and makes Limitty start at login. Headless or WSL? Run `npm install && npm run agent:setup` instead.
+1. **PC:** the **Install agents** setup does this for you (see [One-click setup](#-one-click-setup-on-your-pc)): approve the code on GitHub's page when it opens. Later: Settings → iPhone → **Link iPhone…**. Headless or WSL? Run `npm install && npm run agent:setup` instead.
 2. **iPhone:** Limitty → **Agents on your PC** → **Sign in with GitHub**, and enter the code shown there.
 3. Open **Notifications** to choose your sounds. See [Notifications with different sounds](#-notifications-with-different-sounds).
 
@@ -157,16 +157,17 @@ Limitty runs on Omarchy (Arch + Hyprland + Waybar):
 
 ```bash
 git clone https://github.com/lavickasebastian16/Limitty.git && cd Limitty
-./linux/omarchy-install.sh            # downloads the latest build (needs `gh auth login`, since the repo is private)
+./linux/omarchy-install.sh            # downloads the latest build
+# or, without cloning:  curl -fsSL https://raw.githubusercontent.com/lavickasebastian16/Limitty/HEAD/linux/omarchy-install.sh | bash
 ./linux/omarchy-install.sh --source   # or builds it on your machine
 ```
 
 The script:
 1. Installs the package (`/usr/bin/limitty`).
 2. Adds **Hyprland window rules** (`~/.config/hypr/limitty.conf`, or `limitty.lua` if you use `hyprland.lua`). The widget floats top-right, is pinned on every workspace, has no border or shadow, and doesn't steal focus. It also starts Limitty with Hyprland.
-3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget; right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
+3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget, middle-click opens the prompt box, right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
 
-Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents` (setup), `limitty --prompt` (type a task), `limitty --settings`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
+Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents` (setup), `limitty --prompt` (type a task), `limitty --settings`, `limitty --waybar` (prints the Waybar JSON). **Start at login** (Settings) writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
 
 ## 🔢 Versions
 

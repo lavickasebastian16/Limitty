@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+
 // One-step "connect this PC to your iPhone": sign in with GitHub, find or create
 // the private status Gist, and install the agent hooks. Used by `npm run agent:setup`
 // and by the desktop app's "Connect agents to iPhone…" menu item.
@@ -43,6 +45,26 @@ function installHooks() {
   return results;
 }
 
+/**
+ * At app start: keep ~/.limitty/hook.js current, and rewrite our hooks if they were
+ * installed by an older version or another copy of Limitty (e.g. moved AppImage).
+ * Only touches agents that already have our hooks. Returns the names it fixed.
+ */
+function repairHooks() {
+  const fixed = [];
+  try { hooks.ensureHookScript(); } catch { return fixed; }
+  const check = (name, file, current, install) => {
+    let text;
+    try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+    if (!text.includes(hooks.MARK) || text.includes(current)) return;
+    try { install(); fixed.push(name); } catch { /* leave it */ }
+  };
+  check('Claude Code', hooks.claudeSettingsPath(), JSON.stringify(hooks.hookCommand('claude')).slice(1, -1), () => hooks.installClaude());
+  check('Antigravity', hooks.agyHooksPath(), JSON.stringify(hooks.hookCommand('agy', 'Stop')).slice(1, -1), () => hooks.installAgy());
+  check('Codex', hooks.codexConfigPath(), hooks.hookArgv('codex').map((a) => JSON.stringify(a)).join(', '), () => hooks.installCodex());
+  return fixed;
+}
+
 function disconnect() {
   const cfg = config.load();
   if (cfg?.github) {
@@ -51,4 +73,4 @@ function disconnect() {
   }
 }
 
-module.exports = { connect, disconnect, installHooks };
+module.exports = { repairHooks, connect, disconnect, installHooks };

@@ -206,7 +206,8 @@ test('worker commands carry the chosen model', () => {
   assert.ok(command('claude', 'x', 'plan').args.includes('--disallowedTools'));
   const codex = command('codex', 'x', 'work', {}, 'high');
   assert.ok(codex.args.includes('model_reasoning_effort="high"'));
-  assert.ok(codex.args.includes('--full-auto'));
+  assert.deepStrictEqual(codex.args.slice(codex.args.indexOf('--sandbox'), codex.args.indexOf('--sandbox') + 2), ['--sandbox', 'workspace-write']);
+  assert.ok(!codex.args.includes('--full-auto'), 'removed in newer Codex');
   assert.ok(command('codex', 'x', 'plan').args.includes('read-only'));
   assert.ok(!command('agy', 'x', 'work', {}, 'pro').args.includes('--model'), 'no slug configured → no flag');
   assert.deepStrictEqual(command('agy', 'x', 'work', { agyModels: { pro: 'g-pro' } }, 'pro').args.slice(0, 4), ['-p', 'x', '--model', 'g-pro']);

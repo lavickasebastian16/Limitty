@@ -88,8 +88,9 @@ function command(worker, prompt, mode = 'work', opts = {}, model = null) {
     case 'codex':
       return {
         bin: 'codex',
-        // "-" = read the prompt from stdin. --full-auto: edit + run commands inside the project sandbox.
-        args: ['exec', '--skip-git-repo-check', ...m, ...(mode === 'plan' ? ['--sandbox', 'read-only'] : ['--full-auto']), '-'],
+        // "-" = read the prompt from stdin. workspace-write: edit files and run commands inside
+        // the project folder (what --full-auto did; newer Codex versions removed that flag).
+        args: ['exec', '--skip-git-repo-check', ...m, '--sandbox', mode === 'plan' ? 'read-only' : 'workspace-write', '-'],
         stdin: prompt,
         parse: (out) => ({ text: out, failed: false }),
       };

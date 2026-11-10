@@ -138,7 +138,7 @@ test('hooks: install merges with existing settings and uninstall removes only ou
   const agy = path.join(dir, 'hooks.json');
   hooks.installAgy(agy);
   const a = JSON.parse(fs.readFileSync(agy, 'utf8')).limitty;
-  assert.ok(a.Stop[0].command.endsWith(`hook agy Stop ${hooks.MARK}`));
+  assert.ok(a.Stop[0].command.endsWith(`hook.js" "agy" "Stop" "${hooks.MARK}"`), a.Stop[0].command);
   hooks.uninstallAgy(agy);
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(agy, 'utf8')), {});
 
@@ -153,6 +153,27 @@ test('hooks: install merges with existing settings and uninstall removes only ou
 
   fs.writeFileSync(toml, 'notify = ["my-notifier"]\n');
   assert.strictEqual(hooks.installCodex(toml).status, 'conflict');
+});
+
+test('hooks: the installed commands really run and record events (Claude via shell, Codex via argv)', () => {
+  const { execSync, spawnSync } = require('child_process');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-hookrun-'));
+  const claude = path.join(dir, 'settings.json');
+  hooks.installClaude(claude);
+  assert.ok(fs.existsSync(hooks.hookScriptPath()), 'hook script copied to ~/.limitty');
+  const cmd = JSON.parse(fs.readFileSync(claude, 'utf8')).hooks.Notification[0].hooks[0].command;
+  const events = path.join(process.env.LIMITTY_HOME, 'events.jsonl');
+  fs.rmSync(events, { force: true });
+  // Claude Code runs hook commands through a shell, with the event as JSON on stdin.
+  execSync(cmd, { input: JSON.stringify({ hook_event_name: 'Notification', session_id: 'real1', cwd: '/p/x', notification_type: 'permission_prompt', message: 'May I?' }) });
+  // Codex runs `notify` as an argument list and appends one JSON argument.
+  const toml = path.join(dir, 'config.toml');
+  hooks.installCodex(toml);
+  const argv = JSON.parse(fs.readFileSync(toml, 'utf8').match(/notify = (\[.*\])/)[1]);
+  spawnSync(argv[0], [...argv.slice(1), JSON.stringify({ type: 'agent-turn-complete', 'thread-id': 'th9', cwd: '/p/y' })]);
+  const lines = fs.readFileSync(events, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.deepStrictEqual(lines.map((e) => [e.agent, e.event, e.session]), [['claude', 'Notification', 'real1'], ['codex', 'agent-turn-complete', 'th9']]);
+  assert.strictEqual(lines[0].detail.message, 'May I?');
 });
 
 test('normalize: maps each agent\'s hook payload', () => {
@@ -190,4 +211,29 @@ test('daemon: relays encrypted status and plain alerts, within budget', async ()
   d.requestStatus();
   assert.strictEqual(posts.filter((p) => p.url.endsWith('/limitty-test')).length, 2);
   d.stop();
+});
+
+test('hooks: repair rewrites hooks left by an older version, and leaves others alone', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-repair-'));
+  const saved = { HOME: process.env.HOME, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR, CODEX_HOME: process.env.CODEX_HOME };
+  process.env.HOME = home;
+  process.env.CLAUDE_CONFIG_DIR = path.join(home, '.claude');
+  process.env.CODEX_HOME = path.join(home, '.codex');
+  try {
+    const { repairHooks } = require('../src/agents/connect');
+    // Nothing installed: nothing to do.
+    assert.deepStrictEqual(repairHooks(), []);
+    // An old-style hook (the app binary + a path inside the app) in Claude Code's settings.
+    fs.mkdirSync(process.env.CLAUDE_CONFIG_DIR, { recursive: true });
+    const old = `"/opt/Limitty/limitty" "/opt/Limitty/resources/app.asar/src/agents/cli.js" hook claude ${hooks.MARK}`;
+    fs.writeFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'settings.json'), JSON.stringify({ theme: 'dark', hooks: { Stop: [{ hooks: [{ type: 'command', command: old }] }] } }));
+    assert.deepStrictEqual(repairHooks(), ['Claude Code']);
+    const s = JSON.parse(fs.readFileSync(path.join(process.env.CLAUDE_CONFIG_DIR, 'settings.json'), 'utf8'));
+    assert.strictEqual(s.theme, 'dark');
+    assert.strictEqual(s.hooks.Stop.length, 1, 'old one replaced, not added to');
+    assert.strictEqual(s.hooks.Stop[0].hooks[0].command, hooks.hookCommand('claude'));
+    assert.deepStrictEqual(repairHooks(), [], 'up to date now');
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
 });

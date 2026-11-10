@@ -45,58 +45,12 @@ async function main() {
 
 // ───────────── hook: called by the agents; must be fast and silent ─────────────
 
-async function hook([agent, event]) {
-  try {
-    let payload = {};
-    if (agent === 'codex') {
-      // Codex passes one JSON argument (after our marker).
-      const json = process.argv.slice(2).reverse().find((a) => a.startsWith('{'));
-      payload = json ? JSON.parse(json) : {};
-    } else {
-      const text = await readStdin(1500);
-      payload = text.trim() ? JSON.parse(text) : {};
-    }
-    const ev = normalize(agent, event, payload);
-    if (!ev) return;
-    fs.mkdirSync(config.FILES.dir, { recursive: true });
-    fs.appendFileSync(config.FILES.events, `${JSON.stringify(ev)}\n`);
-  } catch {
-    // Never break the agent because of Limitty.
-  }
+/** Kept for hooks installed by older versions (they call `cli.js hook …`). */
+function hook(args) {
+  return require('./hook').main(args);
 }
 
-function normalize(agent, event, p) {
-  const t = Date.now();
-  if (agent === 'claude') {
-    return {
-      t, agent, event: p.hook_event_name || event, session: p.session_id, cwd: p.cwd,
-      detail: { tool: p.tool_name, type: p.notification_type, message: p.message },
-    };
-  }
-  if (agent === 'agy') {
-    return {
-      t, agent, event, session: p.conversationId || p.conversation_id || p.sessionId, cwd: p.cwd || p.workspacePath || process.cwd(),
-      detail: { tool: p.toolCall?.name || p.tool_name, fullyIdle: p.fullyIdle },
-    };
-  }
-  if (agent === 'codex') {
-    return { t, agent, event: p.type || event, session: p['thread-id'] || p.thread_id, cwd: p.cwd, detail: {} };
-  }
-  return null;
-}
 
-function readStdin(timeoutMs) {
-  return new Promise((resolve) => {
-    if (process.stdin.isTTY) return resolve('');
-    let data = '';
-    const done = () => resolve(data);
-    const timer = setTimeout(done, timeoutMs);
-    process.stdin.setEncoding('utf8');
-    process.stdin.on('data', (c) => { data += c; });
-    process.stdin.on('end', () => { clearTimeout(timer); done(); });
-    process.stdin.on('error', () => { clearTimeout(timer); done(); });
-  });
-}
 
 // ───────────── setup ─────────────
 
@@ -302,7 +256,7 @@ if (require.main === module) {
   });
 }
 
-module.exports = { normalize };
+module.exports = { normalize: require('./hook').normalize };
 
 /** Choose, install and sign in to your agents from a terminal. */
 async function agentsCmd([sub, ...rest]) {
