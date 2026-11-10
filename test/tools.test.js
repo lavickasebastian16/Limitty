@@ -120,6 +120,9 @@ test('Antigravity sign-in: runs its session hidden, and finishes once agy answer
 if [ "$1" = "-p" ]; then [ -f "$HOME/agy-token" ] && { echo OK; exit 0; }; echo "authentication required" >&2; exit 1; fi
 [ -t 0 ] || { echo "not a terminal"; exit 2; }
 echo "Welcome to Antigravity. Opening your browser to sign in with Google…"
+[ "$(stty size | cut -d' ' -f2)" -ge 1000 ] || { echo "terminal too narrow"; exit 3; }
+[ "$BROWSER" = "true" ] || { echo "BROWSER not neutralised"; exit 4; }
+printf '\\033[1m\\033]0;agy\\007│ Authentication required. Please visit the URL to log in: │\\033[0m\\n'
 echo "https://accounts.google.com/o/oauth2/auth?client_id=agy"
 sleep 1
 touch "$HOME/agy-token"
@@ -130,7 +133,7 @@ sleep 300
   const urls = [];
   const s = tools.browserLogin('agy', { onUrl: (u, o) => urls.push([u, o.open]), probeMs: 300 });
   assert.strictEqual(await s.promise, 'signed-in');
-  assert.deepStrictEqual(urls, [['https://accounts.google.com/o/oauth2/auth?client_id=agy', false]], 'link offered; agy opens its own tab');
+  assert.deepStrictEqual(urls, [['https://accounts.google.com/o/oauth2/auth?client_id=agy', true]], 'Limitty opens the sign-in link in your browser');
   assert.strictEqual(tools.TOOLS.agy.signedIn(), true, 'remembered');
 
   // Skipped before signing in.

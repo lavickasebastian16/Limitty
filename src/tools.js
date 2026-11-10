@@ -251,14 +251,17 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
   let finish;
   const promise = new Promise((resolve) => { finish = resolve; });
   const env = ensurePath({ ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' });
-  // Limitty opens the page itself, so stop the agents opening a second tab.
-  if (id !== 'agy') env.BROWSER = process.platform === 'win32' ? 'cmd /c rem' : 'true';
+  // Limitty opens the page itself (in your normal browser), so stop the agents opening one:
+  // $BROWSER can be a terminal program (e.g. on Omarchy), which is how a terminal could pop up.
+  env.BROWSER = process.platform === 'win32' ? 'cmd /c rem' : 'true';
   if (id === 'agy') env.TERM = env.TERM || 'xterm-256color';
   // agy only signs in from its interactive session, which needs a terminal: give it a
   // hidden one with `script`, and let it open the browser itself.
   const isAgy = id === 'agy';
+  // A very wide hidden terminal, so the long sign-in link isn't broken across lines.
+  const wide = `stty cols 2000 rows 50 2>/dev/null; exec '${bin.replace(/'/g, `'\\''`)}'`;
   const [cmd, args] = !isAgy ? [bin, t.login]
-    : process.platform === 'darwin' ? ['script', ['-q', '/dev/null', bin]] : ['script', ['-qfc', `'${bin.replace(/'/g, `'\\''`)}'`, '/dev/null']];
+    : process.platform === 'darwin' ? ['script', ['-q', '/dev/null', '/bin/sh', '-c', wide]] : ['script', ['-qfc', wide, '/dev/null']];
   let probe = null;
   try {
     child = spawnImpl(cmd, args, { cwd: HOME, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -269,7 +272,7 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
   const feed = (buf) => {
     for (const raw of String(buf).split(/\r?\n|\r/)) {
       // eslint-disable-next-line no-control-regex
-      const line = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim();
+      const line = raw.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/[│┃║╭╮╰╯─]/g, ' ').trim();
       if (!line) continue;
       lines.push(line);
       if (lines.length > 40) lines.shift();
@@ -278,8 +281,7 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
         // Only sign-in pages, not e.g. a docs link; and each one once.
         if (seen.has(url) || !/oauth|auth|login|accounts\.google|signin/i.test(url)) continue;
         seen.add(url);
-        // agy opens its own tab on a desktop; open ours only when it asks you to (remote-style sign-in).
-        onUrl(url, { open: !isAgy || /visit|open (this|the)|paste|code/i.test(lines.slice(-3).join(' ')) });
+        onUrl(url, { open: true });
       }
     }
   };

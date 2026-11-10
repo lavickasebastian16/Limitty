@@ -107,6 +107,7 @@ document.addEventListener('click', async (e) => {
     $('logBox').hidden = false;
     agents.install(t.dataset.install).then((s) => { state = s; render(); });
   } else if (t.dataset.login) {
+    $('logBox').hidden = false;
     state = await agents.login(t.dataset.login);
     render();
   } else if (t.dataset.reopen) {
