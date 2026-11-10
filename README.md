@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.02.000**
+**Version 1.02.001**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/L
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.02.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.02.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.02.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.02.001.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.02.001-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.02.001-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -37,17 +37,9 @@ Automatic install works on Linux and macOS. On Windows, install the agents from 
 
 ## 🔔 Notifications with different sounds
 
-On the iPhone, open **Notifications**. You get one sound when an agent **needs your permission** (or has a question), and a different one when it's **done**. Company tasks that finish or fail alert you too. Pick the sounds you like.
+On the iPhone, open **Notifications**. You get one sound when an agent **needs your permission** (or has a question), and a different one when it's **done**. Company tasks that finish or fail alert you too. Pick both sounds from Limitty's own set (Alert, Knock knock, Ping, Chime, Success) and tap ▶︎ to preview.
 
-- **Instant, even when Limitty is closed:**
-  1. Install **[Bark](https://apps.apple.com/app/id1403753865)**, a free push app.
-  2. Tap the copy button next to Bark's first example link.
-  3. In Limitty → Notifications, tap **Paste**.
-
-  You'll get two test alerts so you can hear both sounds. From then on your PC sends each alert straight to Bark with your chosen sound. Limitty saves the Bark key and your sounds in your private Gist; that's how the PC knows them.
-- **Without Bark:** Limitty alerts you with its own sounds while it's open, and now and then in the background when iOS allows it.
-
-Why Bark? iPhone apps installed without a paid Apple developer account can't receive pushes themselves, so a push app has to deliver them. `node src/agents/cli.js test` sends both test alerts from the PC.
+Limitty posts these itself, while it's open and when iOS wakes it in the background. iPhone apps installed without a paid Apple developer account can't receive instant pushes, so an alert can arrive late, or only when you open Limitty. Your PC's optional ntfy alerts (`node src/agents/cli.js pair`) are a separate extra with ntfy's own sound.
 
 ## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
@@ -62,7 +54,7 @@ See whether each agent on your PC is **working**, **needs you** (a permission pr
 
 1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…**, then enter the code shown on GitHub's page. This installs the agent hooks and makes Limitty start at login. Headless or WSL? Run `npm install && npm run agent:setup` instead.
 2. **iPhone:** Limitty → **Agents on your PC** → **Sign in with GitHub**, and enter the code shown there.
-3. Open **Notifications** to choose your sounds, and add Bark for instant alerts. See [Notifications with different sounds](#-notifications-with-different-sounds).
+3. Open **Notifications** to choose your sounds. See [Notifications with different sounds](#-notifications-with-different-sounds).
 
 Status is stored in a **private Gist** on your GitHub account. Limitty only asks for Gist access. More details are below under [How agent status works](#how-agent-status-works).
 

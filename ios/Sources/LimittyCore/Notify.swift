@@ -6,24 +6,13 @@ import FoundationNetworking
 // Notifications when an agent needs your permission or is done, with a
 // different sound for each.
 //
-//  - In Limitty itself: local notifications with Limitty's own sounds, while the
-//    app is open or refreshing in the background.
-//  - Instantly, even when Limitty is closed: through Bark, a free push app. The
-//    phone saves the Bark key and your sounds to limitty-phone.json in your
-//    private Gist; the PC reads them and sends each alert straight to Bark.
-//    (Limitty can't receive pushes itself without a paid Apple developer account.)
+// Limitty posts local notifications with its own sounds, while the app is open
+// and when iOS wakes it in the background. (Limitty can't receive pushes without a
+// paid Apple developer account.) The PC's ntfy alerts are a separate, optional extra.
 
 public enum AlertKind: String, Codable, Sendable { case attention, done }
 
 public struct PhoneSettings: Codable, Hashable, Sendable {
-    public struct Bark: Codable, Hashable, Sendable {
-        public var server: String
-        public var key: String
-        public init(server: String = "https://api.day.app", key: String) {
-            self.server = server
-            self.key = key
-        }
-    }
     public struct Sounds: Codable, Hashable, Sendable {
         public var attention: String
         public var done: String
@@ -38,21 +27,16 @@ public struct PhoneSettings: Codable, Hashable, Sendable {
         public var finished = true
         /// Alert when a Company task is done or fails.
         public var tasks = true
-        public var bark: Bark?
-        /// Bark's sound names (used by the PC when it sends through Bark).
-        public var sounds = Sounds(attention: BarkSound.defaultAttention, done: BarkSound.defaultDone)
-        /// Limitty's own sounds (local notifications).
+        /// Limitty's own sounds.
         public var localSounds = Sounds(attention: LocalSound.alert.rawValue, done: LocalSound.chime.rawValue)
         public init() {}
 
-        enum CodingKeys: String, CodingKey { case enabled, finished, tasks, bark, sounds, localSounds }
+        enum CodingKeys: String, CodingKey { case enabled, finished, tasks, localSounds }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
             finished = try c.decodeIfPresent(Bool.self, forKey: .finished) ?? true
             tasks = try c.decodeIfPresent(Bool.self, forKey: .tasks) ?? true
-            bark = try c.decodeIfPresent(Bark.self, forKey: .bark)
-            sounds = try c.decodeIfPresent(Sounds.self, forKey: .sounds) ?? sounds
             localSounds = try c.decodeIfPresent(Sounds.self, forKey: .localSounds) ?? localSounds
         }
     }
@@ -66,60 +50,6 @@ public struct PhoneSettings: Codable, Hashable, Sendable {
         guard notify.enabled else { return false }
         if task { return notify.tasks }
         return kind == .attention || notify.finished
-    }
-}
-
-/// Bark's built-in sounds (github.com/Finb/Bark/tree/master/Sounds).
-public enum BarkSound {
-    public static let all = ["alarm", "anticipate", "bell", "birdsong", "bloom", "calypso", "chime", "choo", "descent",
-                             "electronic", "fanfare", "glass", "gotosleep", "healthnotification", "horn", "ladder", "mailsent",
-                             "minuet", "multiwayinvitation", "newmail", "newsflash", "noir", "paymentsuccess", "shake",
-                             "sherwoodforest", "spell", "suspense", "telegraph", "tiptoes", "typewriters", "update"]
-    public static let defaultAttention = "alarm"
-    public static let defaultDone = "glass"
-
-    public static func label(_ name: String) -> String {
-        switch name {
-        case "healthnotification": "Health notification"
-        case "multiwayinvitation": "Multiway invitation"
-        case "newmail": "New mail"
-        case "mailsent": "Mail sent"
-        case "newsflash": "News flash"
-        case "paymentsuccess": "Payment success"
-        case "sherwoodforest": "Sherwood forest"
-        case "gotosleep": "Go to sleep"
-        default: name.prefix(1).uppercased() + name.dropFirst()
-        }
-    }
-}
-
-public enum BarkLink {
-    /// Accepts what Bark's copy button gives (`https://api.day.app/KEY/…`) or a bare key.
-    public static func parse(_ text: String) -> PhoneSettings.Bark? {
-        let raw = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isKey = { (s: String) in s.range(of: #"^[A-Za-z0-9_-]{8,64}$"#, options: .regularExpression) != nil }
-        if isKey(raw) { return .init(key: raw) }
-        // Find the first URL in the text (Bark's example lines include extra words).
-        guard let range = raw.range(of: #"https://[^\s"'<>]+"#, options: .regularExpression),
-              let c = URLComponents(string: String(raw[range])), let host = c.host, !host.isEmpty
-        else { return nil }
-        guard let key = c.path.split(separator: "/").first.map(String.init), isKey(key) else { return nil }
-        let port = c.port.map { ":\($0)" } ?? ""
-        return .init(server: "https://\(host)\(port)", key: key)
-    }
-
-    /// Sends a push straight from the phone (used for the test button).
-    public static func send(_ bark: PhoneSettings.Bark, title: String, body: String, sound: String, kind: AlertKind,
-                            http: HTTPClient = URLSessionHTTPClient()) async throws {
-        let payload: [String: Any] = [
-            "device_key": bark.key, "title": title, "body": body, "sound": sound,
-            "level": kind == .attention ? "timeSensitive" : "active",
-            "group": kind == .attention ? "Limitty · needs you" : "Limitty · done",
-            "url": "limitty://agents",
-        ]
-        let body = try JSONSerialization.data(withJSONObject: payload)
-        let res = try await http.post(URL(string: "\(bark.server)/push")!, headers: ["Content-Type": "application/json; charset=utf-8"], body: body)
-        try check(res.status, site: "Bark")
     }
 }
 
@@ -248,21 +178,6 @@ public enum LocalSound: String, CaseIterable, Codable, Sendable {
 }
 
 // MARK: - Saving
-
-extension GitHubStatusFeed {
-    public static let phoneFile = "limitty-phone.json"
-
-    /// Saves your alert settings where the PC reads them.
-    public func savePhoneSettings(_ settings: PhoneSettings, account: GitHubAccount) async throws {
-        guard let id = account.gistId else { throw LimitError("Connect your PC first") }
-        let content = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
-        let body = try JSONSerialization.data(withJSONObject: ["files": [Self.phoneFile: ["content": content]]])
-        var headers = self.headers(account.token)
-        headers["Content-Type"] = "application/json"
-        let res = try await http.send(HTTPRequest(method: "PATCH", url: URL(string: "https://api.github.com/gists/\(id)")!, headers: headers, body: body))
-        try check(res.status, site: "GitHub")
-    }
-}
 
 extension SharedStore {
     private var phoneURL: URL { directory.appendingPathComponent("phone-settings.json") }

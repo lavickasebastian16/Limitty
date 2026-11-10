@@ -191,29 +191,3 @@ test('daemon: relays encrypted status and plain alerts, within budget', async ()
   assert.strictEqual(posts.filter((p) => p.url.endsWith('/limitty-test')).length, 2);
   d.stop();
 });
-
-test('daemon: with Bark set up on the phone, alerts use Bark with a sound per kind (no ntfy)', async () => {
-  const cfg = { ...config.DEFAULTS, topic: 'limitty-test', key: config.base64url(Buffer.alloc(32, 1)), github: { token: 't', gistId: 'g', login: 'me' } };
-  const phone = { notify: { bark: { server: 'https://api.day.app', key: 'AbCdEf123456' }, sounds: { attention: 'telegraph', done: 'bell' } } };
-  const calls = [];
-  const fetchImpl = async (url, init = {}) => {
-    calls.push({ url, ...init });
-    if (url.endsWith('/gists/g') && (init.method || 'GET') === 'GET') {
-      return { ok: true, status: 200, json: async () => ({ files: { 'limitty-phone.json': { content: JSON.stringify(phone) } } }) };
-    }
-    return { ok: true, status: 200, json: async () => ({}) };
-  };
-  let now = 2_000_000_000;
-  const d = new Daemon(cfg, { now: () => now, fetchImpl });
-  await d.pollPhone();
-  assert.strictEqual(d.phone.sounds.attention, 'telegraph');
-  d.ingest([{ t: now, agent: 'claude', event: 'Notification', session: 's', cwd: '/p/site', detail: { type: 'permission_prompt', message: 'Claude needs your permission to use Bash' } }]);
-  now += 1000;
-  d.ingest([{ t: now, agent: 'claude', event: 'Stop', session: 's', cwd: '/p/site' }]);
-  await new Promise((r) => setTimeout(r, 50));
-  const bark = calls.filter((c) => c.url === 'https://api.day.app/push').map((c) => JSON.parse(c.body));
-  assert.deepStrictEqual(bark.map((b) => [b.sound, b.level]), [['telegraph', 'timeSensitive'], ['bell', 'active']]);
-  assert.match(bark[0].title, /Claude Code needs you/);
-  assert.strictEqual(calls.filter((c) => c.url.includes('ntfy')).length, 0, 'no ntfy alerts');
-  d.stop();
-});

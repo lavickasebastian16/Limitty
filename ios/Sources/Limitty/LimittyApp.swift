@@ -45,10 +45,8 @@ final class AppModel {
     private let feed = AgentFeed()
     private let githubFeed = GitHubStatusFeed()
 
-    /// Notification settings (also saved to the Gist so the PC can send Bark alerts).
+    /// Notification settings.
     private(set) var phone = PhoneSettings()
-    private(set) var phoneSyncError: String?
-    private var phoneSyncTask: Task<Void, Never>?
 
     var agentsConnected: Bool { github != nil || pairing != nil }
     /// ntfy topic/server for push alerts (from the PC's status in GitHub mode, or the QR pairing).
@@ -69,31 +67,10 @@ final class AppModel {
         change(&phone)
         phone.updatedAt = Date().timeIntervalSince1970
         store.savePhoneSettings(phone)
-        syncPhone()
     }
 
-    /// Saves the settings to the Gist (debounced), so the PC uses your Bark key and sounds.
-    private func syncPhone() {
-        phoneSyncTask?.cancel()
-        guard let gh = github, gh.gistId != nil else { return }
-        let settings = phone
-        phoneSyncTask = Task {
-            try? await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled else { return }
-            do {
-                try await githubFeed.savePhoneSettings(settings, account: gh)
-                phoneSyncError = nil
-            } catch let e as LimitError {
-                phoneSyncError = "Couldn't save to your PC: \(e.message)"
-            } catch {
-                phoneSyncError = "Couldn't save to your PC. Check your connection."
-            }
-        }
-    }
-
-    /// Local notifications for what changed. With Bark set up, the PC sends them instead.
+    /// Local notifications for what changed.
     private func deliver(_ alerts: [AgentAlert]) {
-        guard !alerts.isEmpty, phone.notify.bark == nil || github == nil else { return }
         for a in alerts where phone.wants(a.kind, task: a.isTask) {
             AlertCenter.shared.post(a, settings: phone)
         }
@@ -171,7 +148,6 @@ final class AppModel {
         agentError = nil
         Task {
             await refreshAgents()
-            syncPhone() // the PC learns your notification settings
             await AlertCenter.shared.requestPermission()
         }
     }
