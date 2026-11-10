@@ -11,7 +11,7 @@
     "agent:setup": "node src/agents/cli.js setup",
     "agent:status": "node src/agents/cli.js status",
     "test": "node --test",
-    "dist:linux": "LIMITTY_VERSION=$(node -p \"require('./limitty.json').version\") electron-builder --linux"
+    "dist:linux": "LIMITTY_VERSION=$(node -p \"require('./limitty.json').version\") electron-builder --publish never --linux"
   },
   "devDependencies": {
     "electron": "^33.2.1",
