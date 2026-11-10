@@ -1,6 +1,15 @@
 # Limitty
 
-A small, always-on-top desktop widget that shows your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits in one place, with a progress bar and reset countdown for each limit window.
+See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window.
+
+## 📱 iPhone widget (Claude + Codex)
+
+Home- and lock-screen widgets that run in the free **Scriptable** app. You don't need a Mac.
+Setup guide: **[ios/README.md](ios/README.md)**. The script is [`ios/Limitty.js`](ios/Limitty.js).
+
+## 🖥️ Desktop widget (Claude + Codex + agy)
+
+A small always-on-top window for Windows, macOS and Linux. It reads the logins your CLIs already store on the computer. Antigravity only works here, because its quota lives on the computer that runs it.
 
 ```
 ● Claude  [Max]
@@ -8,15 +17,13 @@ A small, always-on-top desktop widget that shows your **Claude**, **Codex** and 
   Weekly         █████████░░░░  67%   resets in 3d 4h
 ● Codex   [Plus]
   5h window      ████████████░  91%   resets in 24m
-  Weekly         █████░░░░░░░░  38%   resets in 5d 0h
 ● Antigravity
   Gemini Pro     ██░░░░░░░░░░░  15%   resets in 3h 2m
-  Claude + GPT   ██████░░░░░░░  48%   resets in 3h 2m
 ```
 
 Bars turn amber at 60% and red at 85%.
 
-## Setup
+### Desktop setup
 
 You need [Node.js](https://nodejs.org) 18 or newer.
 
@@ -29,14 +36,14 @@ npm start          # opens the widget (top-right corner)
 
 Want it in the terminal instead? `npm run check` (or `npm run check -- --json`).
 
-### Using the widget
+### Using the desktop widget
 
 - **Drag** the header to move it. It remembers where you put it.
 - **↻** refreshes now. It also refreshes on its own every 5 minutes by default.
 - **⋯** opens settings: refresh interval, always-on-top, which providers to show, start at login, reset position.
 - **✕** hides it to the tray/menu-bar icon. Click the tray icon to bring it back. Quit from the tray menu.
 
-## Where the numbers come from
+### Where the desktop numbers come from
 
 Limitty reads the logins your CLIs already store. It needs no API keys and never writes or refreshes those logins.
 
@@ -48,7 +55,7 @@ Limitty reads the logins your CLIs already store. It needs no API keys and never
 
 > These usage endpoints are the ones the official tools use internally. They aren't public, documented APIs, so a vendor update could change them. Each provider lives in its own small file under `src/providers/` and is easy to adjust.
 
-### Troubleshooting
+### Desktop troubleshooting
 
 - **"Not signed in"**: log in once with the CLI (`claude`, `codex login`, or open Antigravity / run `agy`).
 - **"Login expired"**: run that CLI once so it refreshes its token, then hit ↻.
@@ -57,7 +64,7 @@ Limitty reads the logins your CLIs already store. It needs no API keys and never
 ## Development
 
 ```bash
-npm test                 # parser + rendering unit tests
+npm test                 # unit tests (desktop providers + iPhone script with faked Scriptable APIs)
 npm run check            # print live limits in the terminal
 node scripts/make-icon.js  # regenerate assets/tray.png
 ```
@@ -70,4 +77,5 @@ src/preload.js           Safe bridge between the window and the main process
 src/renderer/            Widget UI (HTML/CSS/JS)
 src/providers/           One module per service: claude.js, codex.js, antigravity.js
 src/cli.js               Terminal output
+ios/Limitty.js           iPhone widget (Scriptable script)
 ```
