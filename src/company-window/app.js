@@ -8,6 +8,14 @@ const STATUS = { queued: 'Waiting', planning: 'CEO is planning', running: 'Worki
 let state = null;
 let openOutputs = new Set();
 
+/** Only touches the page when something changed, so scrolling and text selection survive refreshes. */
+const lastHtml = new WeakMap();
+function setHtml(el, html) {
+  if (lastHtml.get(el) === html) return;
+  lastHtml.set(el, html);
+  el.innerHTML = html;
+}
+
 function ago(ms) {
   const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
   if (s < 60) return 'just now';
@@ -28,7 +36,7 @@ function renderTeam() {
   if (!teamCfg) return;
   if (document.activeElement?.closest('#roles, #ceo')) return; // don't redraw while you type
   $('ceo').value = teamCfg.ceo;
-  $('roles').innerHTML = ['claude', 'codex', 'agy'].map((id) => {
+  setHtml($('roles'), ['claude', 'codex', 'agy'].map((id) => {
     const a = teamCfg.agents.find((x) => x.id === id) || {};
     const t = state.team?.[id] || {};
     const status = !a.chosen ? ['off', 'not used'] : !a.installed ? ['off', 'not installed'] : a.signedIn === false ? ['off', 'not signed in']
@@ -37,7 +45,7 @@ function renderTeam() {
       <div class="who"><span><span class="dot ${id}"></span>${NAMES[id]}${teamCfg.ceo === id ? ' <b class="ceo">CEO</b>' : ''}</span><small class="${status[0]}">${status[1]}</small></div>
       <input data-role="${id}" list="roleIdeas" value="${esc(teamCfg.strengths[id])}" placeholder="${esc(teamCfg.defaultStrengths[id])}" aria-label="${NAMES[id]}'s role">
     </div>`;
-  }).join('');
+  }).join(''));
 }
 
 async function loadTeam() {
@@ -90,10 +98,10 @@ function result(t) {
 
 function renderTasks() {
   if (!state.tasks.length) {
-    $('tasks').innerHTML = '<div class="empty">No tasks yet. Describe one above, or send one from Limitty on your iPhone.</div>';
+    setHtml($('tasks'), '<div class="empty">No tasks yet. Type the main task above, or send one from Limitty on your iPhone.</div>');
     return;
   }
-  $('tasks').innerHTML = state.tasks.map((t) => {
+  setHtml($('tasks'), state.tasks.map((t) => {
     const active = ['queued', 'planning', 'running'].includes(t.status);
     const steps = (t.plan?.steps || []).map((s) => {
       const key = `${t.id}:${s.id}`;
@@ -123,7 +131,7 @@ function renderTasks() {
         ${!active ? `<button class="small ghost" data-act="remove" data-id="${t.id}">Remove</button>` : ''}
       </div>
     </article>`;
-  }).join('');
+  }).join(''));
 }
 
 function render(s) {

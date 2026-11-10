@@ -4,6 +4,14 @@
 const $ = (id) => document.getElementById(id);
 let state = { agents: [], busy: false };
 
+/** Only touches the page when something changed (keeps focus and avoids flicker). */
+const lastHtml = new WeakMap();
+function setHtml(el, html) {
+  if (lastHtml.get(el) === html) return;
+  lastHtml.set(el, html);
+  el.innerHTML = html;
+}
+
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 function pill(a) {
@@ -36,16 +44,16 @@ function renderSteps() {
   $('code').hidden = !s?.code;
   if (s?.code) $('userCode').textContent = s.code.userCode;
   if (!s) return;
-  $('steps').innerHTML = s.steps.map((st) => `
+  setHtml($('steps'), s.steps.map((st) => `
     <li class="${st.state}">
       <span class="ico">${ICONS[st.state] || ''}</span>
       <span class="lbl">${esc(st.label)}</span>
       ${st.note ? `<span class="nt">${esc(st.note)}</span>` : ''}
-    </li>`).join('');
+    </li>`).join(''));
 }
 
 function render() {
-  $('list').innerHTML = state.agents.map((a) => `
+  setHtml($('list'), state.agents.map((a) => `
     <div class="agent ${a.chosen ? '' : 'off'}">
       <input type="checkbox" data-pick="${a.id}" ${a.chosen ? 'checked' : ''} ${state.busy ? 'disabled' : ''} aria-label="Use ${esc(a.name)}">
       <div class="name"><span class="dot ${a.id}"></span>${esc(a.name)} ${pill(a)}</div>
@@ -54,7 +62,7 @@ function render() {
       ${a.error ? `<div class="err">${esc(a.error)}</div>` : ''}
       ${a.note ? `<div class="hint">${esc(a.note)}${a.url ? ' <a href="#" data-reopen="' + a.id + '">Open the page again</a>' : ''}</div>` : ''}
       ${a.job === 'signin' && a.codeBox ? `<form class="code-row" data-code="${a.id}"><input placeholder="Paste the code from the page (if it shows one)" autocomplete="off"><button class="small">Continue</button></form>` : ''}
-    </div>`).join('');
+    </div>`).join(''));
 
   const picked = state.agents.filter((a) => a.chosen);
   const ready = picked.length && picked.every((a) => a.installed && a.signedIn !== false) && state.phoneLinked;

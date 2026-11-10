@@ -260,3 +260,23 @@ test('a sign-in failure from an agent becomes a clear message', () => {
   assert.match(explain('codex', 'Error: 401 Unauthorized'), /^Codex isn't signed in/);
   assert.strictEqual(explain('codex', 'error: tests failed'), null);
 });
+
+test('a long Claude Code answer is read in full (not cut before parsing), and shown shortened', { skip: process.platform === 'win32' }, async () => {
+  const { run } = require('../src/company/workers');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-long-'));
+  // 20,000 characters of answer inside the one-line JSON that `claude -p --output-format json` prints.
+  const answer = `START ${'x'.repeat(20000)} END`;
+  fs.writeFileSync(path.join(dir, 'answer.json'), `${JSON.stringify({ type: 'result', is_error: false, result: answer })}\n`);
+  fs.writeFileSync(path.join(dir, 'claude'), `#!/bin/sh\ncat >/dev/null\ncat "${dir}/answer.json"\n`, { mode: 0o755 });
+  const savedPath = process.env.PATH;
+  process.env.PATH = `${dir}${path.delimiter}${savedPath}`;
+  try {
+    const r = await run('claude', 'x', { cwd: dir }).promise;
+    assert.strictEqual(r.ok, true);
+    assert.ok(r.text.endsWith(' END'), 'the answer text, not raw JSON');
+    assert.ok(!r.text.includes('"type"'));
+    assert.ok(r.text.length <= 6001);
+  } finally {
+    process.env.PATH = savedPath;
+  }
+});

@@ -93,7 +93,8 @@ html, body {
 .rtop { display: flex; justify-content: space-between; gap: 8px; }
 .rlabel { color: var(--text); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rpct { font-variant-numeric: tabular-nums; font-weight: 600; }
-.track { height: 5px; border-radius: 3px; background: var(--track); margin: 3px 0 2px; overflow: hidden; }
+.rpct.warn { color: var(--warn); } .rpct.bad { color: var(--bad); }
+.track { height: 6px; border-radius: 3px; background: var(--track); margin: 3px 0 2px; overflow: hidden; }
 .fill { height: 100%; border-radius: 3px; background: var(--ok); transition: width 0.4s ease; }
 .fill.warn { background: var(--warn); }
 .fill.bad { background: var(--bad); }
@@ -105,18 +106,40 @@ html, body {
 .empty { color: var(--muted); padding: 10px 0; }
 
 /* Prompt box: one task for your agents; the CEO splits it. */
-.ask { margin: 2px 0 8px; display: grid; gap: 5px; }
-.ask textarea { width: 100%; box-sizing: border-box; resize: none; font: inherit; font-size: 12px; color: var(--text);
-  background: var(--track); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; min-height: 30px; max-height: 120px; outline: none; }
-.ask textarea:focus { border-color: var(--claude); }
+.ask { margin: 0 10px 8px; display: grid; gap: 6px; }
+.ask textarea {
+  width: 100%; resize: none; font: inherit; color: var(--text); background: var(--track);
+  border: 1px solid transparent; border-radius: 9px; padding: 7px 9px; min-height: 31px; max-height: 120px; outline: none; overflow: hidden;
+  transition: border-color .12s, background .12s; user-select: text;
+}
+.ask textarea::placeholder { color: var(--muted); }
+.ask textarea:hover { border-color: var(--border); }
+.ask textarea:focus { border-color: var(--claude); background: transparent; }
 .ask-row { display: none; gap: 6px; align-items: center; }
 .ask.open .ask-row { display: flex; }
-.ask select { flex: 0 1 auto; max-width: 130px; font: inherit; font-size: 11px; color: var(--text); background: var(--track);
-  border: 1px solid var(--border); border-radius: 6px; padding: 2px 4px; }
+.ask select {
+  flex: 0 1 auto; max-width: 130px; font: inherit; font-size: 11px; color: var(--text); background: var(--track);
+  border: 1px solid var(--border); border-radius: 6px; padding: 3px 4px; outline: none;
+}
 .ask-status { flex: 1; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ask-status.err { color: var(--bad); }
 .ask-status.ok { color: var(--ok); }
-.ask button { font: inherit; font-size: 11px; font-weight: 600; border: 0; border-radius: 6px; padding: 3px 10px; background: var(--claude); color: #fff; cursor: pointer; }
+.ask button { font: inherit; font-size: 11px; font-weight: 600; border: 0; border-radius: 6px; padding: 4px 10px; background: var(--claude); color: #fff; cursor: pointer; }
+.ask button:hover:not(:disabled) { filter: brightness(1.08); }
 .ask button:disabled { opacity: .5; cursor: default; }
-.tasks-line { color: var(--muted); font-size: 10.5px; margin: -4px 0 6px; cursor: pointer; }
+.tasks-line { color: var(--muted); font-size: 10.5px; margin: -2px 12px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tasks-line:hover { color: var(--text); }
+.tasks-line.done { color: var(--ok); } .tasks-line.failed { color: var(--bad); }
+
+/* Live agent status: who's working, who needs you. */
+#agents { margin: 0 10px 6px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; }
+#agents[hidden] { display: none; }
+.arow { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px; border-radius: 8px; background: var(--track); font-size: 11px; }
+.arow.attention { background: color-mix(in srgb, var(--bad) 18%, transparent); }
+.arow .aname { font-weight: 600; white-space: nowrap; }
+.arow .adetail { color: var(--muted); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arow .astate { font-weight: 600; white-space: nowrap; }
+.arow.attention .astate { color: var(--bad); } .arow.working .astate { color: var(--ok); } .arow.waiting .astate { color: var(--warn); }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; animation: pulse 1.4s ease-in-out infinite; }
+.arow.attention .pulse { background: var(--bad); } .arow.waiting .pulse { background: var(--warn); animation: none; }
+@keyframes pulse { 50% { opacity: .35; transform: scale(.8); } }

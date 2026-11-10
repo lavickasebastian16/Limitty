@@ -22,13 +22,11 @@ function startHost({ log = () => {} } = {}) {
     owner: true,
     company,
     daemon: null,
-    /** Starts (or restarts) the phone relay, e.g. after connecting GitHub. */
+    /** Starts (or restarts) agent tracking and the phone relay, e.g. after linking GitHub. */
     attachRelay() {
       host.daemon?.stop();
       host.daemon = null;
-      const c = config.load();
-      if (!c) return;
-      host.daemon = new Daemon(c, { log, company, skipLock: true });
+      host.daemon = new Daemon(config.ensure(), { log, company, skipLock: true });
       host.daemon.start();
     },
     detachRelay() {

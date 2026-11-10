@@ -1,6 +1,6 @@
 'use strict';
 
-/* global renderAll */
+/* global renderAll, renderAgents */
 const $ = (id) => document.getElementById(id);
 let results = [];
 let fetchedAt = null;
@@ -62,6 +62,7 @@ function paintAsk(info) {
       ask.after(line);
     }
     line.textContent = text;
+    line.className = `tasks-line ${askInfo.active ? '' : askInfo.last.status}`;
   } else if (line) line.remove();
 }
 
@@ -110,3 +111,17 @@ ask.addEventListener('submit', async (e) => {
 window.limitty.onAskInfo(paintAsk);
 window.limitty.onFocusAsk(() => { askText.focus(); });
 window.limitty.askInfo().then((i) => { paintAsk(i); fitAsk(); });
+
+// ───── Live agent status ─────
+
+let agentsHtml = '';
+async function paintAgents() {
+  const html = renderAgents(await window.limitty.agentSessions());
+  if (html === agentsHtml) return;
+  agentsHtml = html;
+  $('agents').innerHTML = html;
+  $('agents').hidden = !html;
+  fitAsk();
+}
+paintAgents();
+setInterval(paintAgents, 3000);

@@ -33,16 +33,25 @@ function renderProvider(r, now) {
   }
   const rows = r.windows.map((w) => {
     const pct = Math.round(w.usedPercent ?? 0);
-    return `<div class="row"><div class="rtop"><span class="rlabel" title="${esc(w.label)}">${esc(w.label)}</span><span class="rpct">${pct}%</span></div>`
+    return `<div class="row"><div class="rtop"><span class="rlabel" title="${esc(w.label)}">${esc(w.label)}</span><span class="rpct ${level(pct)}">${pct}%</span></div>`
       + `<div class="track"><div class="fill ${level(pct)}" style="width:${pct}%"></div></div>`
       + `<div class="reset">${esc(fmtUntil(w.resetsAt, now))}</div></div>`;
   }).join('');
   return `<div class="provider">${head}${rows}</div>`;
 }
 
+const STATE_LABEL = { attention: 'needs you', waiting: 'maybe waiting', working: 'working' };
+
+/** Agents that are doing something right now (from the hooks). */
+function renderAgents(sessions) {
+  return (sessions || []).map((s) => `<div class="arow ${esc(s.state)}" title="${esc(`${s.name} · ${s.project}: ${s.detail}`)}"><span class="pulse"></span>`
+    + `<span class="aname">${esc(s.name)}</span><span class="adetail">${esc(s.project)}${s.detail ? ` · ${esc(s.detail)}` : ''}</span>`
+    + `<span class="astate">${STATE_LABEL[s.state] || esc(s.state)}</span></div>`).join('');
+}
+
 function renderAll(results, now = Date.now()) {
-  if (!results || !results.length) return '<div class="empty">Nothing to show — enable a provider from the ⋯ menu.</div>';
+  if (!results || !results.length) return '<div class="empty">No agents chosen yet. Open ⋯ → Agents to pick and install them.</div>';
   return results.map((r) => renderProvider(r, now)).join('');
 }
 
-if (typeof module !== 'undefined') module.exports = { renderAll, fmtUntil, level };
+if (typeof module !== 'undefined') module.exports = { renderAll, renderAgents, fmtUntil, level };

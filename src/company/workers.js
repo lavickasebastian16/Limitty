@@ -16,7 +16,8 @@ const WORKERS = {
   agy: { name: 'Antigravity (Gemini)', bin: 'agy', strengths: 'frontend/UI work, quick edits, research' },
 };
 
-const OUTPUT_LIMIT = 6000;
+const OUTPUT_LIMIT = 6000; // shown and saved per step
+const FULL_OUTPUT_LIMIT = 4_000_000;
 
 /**
  * Models the CEO can choose per step. `tier` guides the choice; `limit` names the
@@ -146,9 +147,10 @@ function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts
       done({ ok: false, text: `Couldn't start ${WORKERS[worker].name}: ${e.message}`, code: null });
       return;
     }
-    timer = setTimeout(() => { kill(child); done({ ok: false, text: tail(`${out}\n${err}`) + `\n\nStopped after ${Math.round(timeoutMs / 60_000)} minutes.`, code: null }); }, timeoutMs);
+    timer = setTimeout(() => { kill(child); done({ ok: false, text: tail(`${tail(out)}\n${err}`) + `\n\nStopped after ${Math.round(timeoutMs / 60_000)} minutes.`, code: null }); }, timeoutMs);
     child.on('error', (e) => done({ ok: false, text: e.code === 'ENOENT' ? `${WORKERS[worker].name} isn't installed (couldn't find \`${cmd.bin}\`).` : e.message, code: null }));
-    child.stdout.on('data', (d) => { out = tail(out + d); onOutput?.(out); });
+    // Keep (nearly) all of it for parsing: Claude Code answers in one JSON line.
+    child.stdout.on('data', (d) => { out = (out + d).slice(-FULL_OUTPUT_LIMIT); onOutput?.(tail(out)); });
     child.stderr.on('data', (d) => { err = tail(err + d); });
     child.on('close', (code) => {
       if (cancelled) return done({ ok: false, text: 'Cancelled.', code });

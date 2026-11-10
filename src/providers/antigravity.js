@@ -274,9 +274,9 @@ async function fetchAntigravity() {
     if (res) return { ...res, note: 'via agy CLI' };
   }
   if (!servers.length && !bin) {
-    throw new ProviderError('Antigravity not running', 'Open Antigravity or install the `agy` CLI and sign in.');
+    throw new ProviderError('Antigravity not running', 'Its limits show while Antigravity or agy is open.');
   }
-  throw new ProviderError('Could not read quota', 'Make sure you are signed in to Antigravity / `agy`.');
+  throw new ProviderError('Could not read quota', 'Open ⋯ → Agents and press Sign in next to Antigravity.');
 }
 
 module.exports = { id: 'antigravity', name: 'Antigravity', fetch: fetchAntigravity, parseQuota, findServers };

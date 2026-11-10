@@ -100,8 +100,8 @@ async function fetchCodex() {
     return { plan: null, windows: local.windows, note: `from local log · ${new Date(local.asOf).toLocaleString()}` };
   }
 
-  if (!token) throw new ProviderError('Not signed in', 'Run `codex login` and sign in with ChatGPT.');
-  throw new ProviderError(apiError || 'Unavailable', apiError === 'Login expired' ? 'Run `codex` once to refresh your login.' : undefined);
+  if (!token) throw new ProviderError('Not signed in', 'Open ⋯ → Agents and press Sign in.');
+  throw new ProviderError(apiError || 'Unavailable', apiError === 'Login expired' ? 'Open ⋯ → Agents and press Sign in again.' : undefined);
 }
 
 module.exports = { id: 'codex', name: 'Codex', fetch: fetchCodex, parseUsage, readFromSessionLogs };

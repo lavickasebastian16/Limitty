@@ -65,10 +65,10 @@ function parseUsage(json) {
 async function fetchClaude() {
   const creds = await readCredentials();
   if (!creds) {
-    throw new ProviderError('Not signed in', 'Run `claude` and log in with your Claude account.');
+    throw new ProviderError('Not signed in', 'Open ⋯ → Agents and press Sign in.');
   }
   if (creds.expiresAt && creds.expiresAt < Date.now()) {
-    throw new ProviderError('Login expired', 'Open Claude Code once (`claude`) to refresh your login.');
+    throw new ProviderError('Login expired', 'Open ⋯ → Agents and press Sign in again.');
   }
   const res = await fetchJson(USAGE_URL, {
     headers: {
@@ -79,7 +79,7 @@ async function fetchClaude() {
     },
   });
   if (res.status === 401 || res.status === 403) {
-    throw new ProviderError('Login expired', 'Open Claude Code once (`claude`) to refresh your login.');
+    throw new ProviderError('Login expired', 'Open ⋯ → Agents and press Sign in again.');
   }
   if (!res.ok) throw new ProviderError(`Usage API returned HTTP ${res.status}`);
   const windows = parseUsage(res.json);

@@ -45,8 +45,8 @@ const TOOLS = {
     signedIn: () => {
       const dir = process.env.CLAUDE_CONFIG_DIR || path.join(HOME, '.claude');
       if (fs.existsSync(path.join(dir, '.credentials.json'))) return true;
-      // On Linux and Windows that file is the login; on macOS it may be in the Keychain instead.
-      return process.platform === 'darwin' ? null : false;
+      // No login file: it may be in a keyring or an API key, so ask Claude Code itself.
+      return askCli('claude', ['auth', 'status'], (out) => { try { return JSON.parse(out).loggedIn === true; } catch { return /"loggedIn":\s*true/.test(out); } });
     },
   },
   codex: {
@@ -57,7 +57,8 @@ const TOOLS = {
     script: CODEX_SCRIPT,
     login: ['login'],
     loginHint: 'Sign in with your ChatGPT account. The page tells you when you can close it.',
-    signedIn: () => fs.existsSync(path.join(process.env.CODEX_HOME || path.join(HOME, '.codex'), 'auth.json')),
+    signedIn: () => fs.existsSync(path.join(process.env.CODEX_HOME || path.join(HOME, '.codex'), 'auth.json'))
+      || askCli('codex', ['login', 'status'], (out) => /logged in/i.test(out) && !/not logged in/i.test(out)),
   },
   agy: {
     name: 'Antigravity',
@@ -73,6 +74,22 @@ const TOOLS = {
 };
 
 const IDS = Object.keys(TOOLS);
+
+/** Asks an agent's own status command whether it's signed in (cached for a minute; false if it can't say). */
+const cliCache = new Map();
+function askCli(id, args, isSignedIn) {
+  const bin = find(id);
+  if (!bin) return false;
+  const hit = cliCache.get(id);
+  if (hit && Date.now() - hit.at < 60_000) return hit.value;
+  let value = false;
+  try {
+    const r = spawnSync(bin, args, { encoding: 'utf8', timeout: 15_000, env: ensurePath({ ...process.env }) });
+    value = isSignedIn(`${r.stdout || ''}\n${r.stderr || ''}`);
+  } catch { /* can't tell: treat as signed out */ }
+  cliCache.set(id, { at: Date.now(), value });
+  return value;
+}
 
 /** Puts ~/.local/bin on PATH: the installers put the agents there, and apps started from a launcher often don't have it. */
 function ensurePath(env = process.env) {
@@ -263,6 +280,7 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
   child.on('close', (code) => {
     clearTimeout(timer);
     if (cancelled) return finish('cancelled');
+    cliCache.delete(id);
     const signed = t.signedIn();
     finish(signed === true || (code === 0 && signed !== false) ? 'signed-in' : 'failed');
   });

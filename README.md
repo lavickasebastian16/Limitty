@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.04.000**
+**Version 1.05.000**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,9 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/l
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.04.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.04.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.04.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.05.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.05.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.05.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 🧩 One-click setup on your PC
 
@@ -96,6 +96,8 @@ Open Settings from the menu (⋯) → **Settings…**, or run `limitty --setting
 They're stored in `~/.limitty/agent.json`, so the background agent and the CLI use the same settings.
 
 ## 🖥️ Desktop widget (Claude + Codex + agy)
+
+The widget also shows **live agent status**: a row for each agent that's working or needs you right now, even without a phone linked.
 
 A small always-on-top window for Windows, macOS and Linux. It reads the logins your CLIs already store on the computer. Antigravity only works here, because its quota lives on the computer that runs it.
 

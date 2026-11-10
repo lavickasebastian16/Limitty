@@ -190,7 +190,7 @@ const SETUP_STEPS = [
   ['install', 'Install the agents'],
   ['signin', 'Sign in to each agent'],
   ['phone', 'Link your iPhone (GitHub)'],
-  ['hooks', 'Live status and alerts for your phone'],
+  ['hooks', 'Live agent status (widget and phone)'],
   ['autostart', 'Start Limitty at login'],
 ];
 let setup = null; // { steps: { id: { state, note } }, code, finished }
@@ -344,8 +344,11 @@ async function runSetup() {
         host?.attachRelay?.();
       } catch (e) {
         setup.code = null;
-        setStep('phone', 'failed', e.message);
-        setStep('hooks', 'skipped', 'Needs the phone link.');
+        setStep('phone', 'failed', `${e.message} You can link it later in Settings → iPhone.`);
+        // Live status still works on this PC without the phone.
+        const results = require('./agents/connect').installHooks();
+        const bad = results.filter(([, ok]) => !ok);
+        setStep('hooks', bad.length ? 'failed' : 'done', bad.length ? bad.map(([n, , m]) => `${n}: ${m}`).join(' · ') : 'Restart open agent sessions to pick them up.');
       }
     }
 
@@ -472,6 +475,18 @@ function companyState() {
 function pushCompanyState() {
   companyWin?.webContents.send('company:update', companyState());
   win?.webContents.send('ask:info', askInfo());
+}
+
+// ───── Live agent status in the widget ─────
+
+function agentSessions() {
+  const { snapshot } = require('./agents/state');
+  let sessions = host?.daemon?.sessions;
+  if (!sessions) {
+    // The background agent runs things: read what it saved.
+    try { sessions = JSON.parse(fs.readFileSync(require('./agents/config').FILES.state, 'utf8')).sessions; } catch { sessions = {}; }
+  }
+  return snapshot(sessions || {}, { host: '', now: Date.now() }).sessions.filter((s) => s.state !== 'idle').slice(0, 4);
 }
 
 // ───── Prompt box in the widget ─────
@@ -686,6 +701,7 @@ if (process.argv.includes('--waybar')) {
     ipcMain.on('window:menu', () => buildTrayMenu().popup({ window: win }));
     ipcMain.on('window:company', openCompany);
     ipcMain.handle('ask:info', () => askInfo());
+    ipcMain.handle('agents:sessions', () => agentSessions());
     ipcMain.handle('ask:send', (_e, req) => askSend(req));
     setupCompanyIpc();
     setupAgentsIpc();

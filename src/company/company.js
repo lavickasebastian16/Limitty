@@ -275,9 +275,15 @@ class Company extends EventEmitter {
       this.changed();
       return;
     }
+    const team = this.team();
+    if (task.worker !== 'auto' && !team[task.worker]?.available) {
+      this.store.update(task.id, (t) => { t.status = 'failed'; t.error = `${WORKERS[task.worker].name} isn't ready (not installed, not signed in, or out of usage limit). Open Agents to fix it, or pick “CEO decides”.`; });
+      this.changed();
+      return;
+    }
     this.store.update(task.id, (t) => { t.status = 'planning'; });
     this.changed();
-    const job = makePlan(task, this.team(), { ceo: this.ceo, runImpl: this.runImpl, opts: this.workerOptions });
+    const job = makePlan(task, team, { ceo: this.ceo, runImpl: this.runImpl, opts: this.workerOptions });
     this.jobs.set(task.id, job);
     job.plan.then((plan) => {
       this.jobs.delete(task.id);

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('limitty', {
   hide: () => ipcRenderer.send('window:hide'),
   menu: () => ipcRenderer.send('window:menu'),
   company: () => ipcRenderer.send('window:company'),
+  agentSessions: () => ipcRenderer.invoke('agents:sessions'),
   // Prompt box: send one task to the CEO.
   askInfo: () => ipcRenderer.invoke('ask:info'),
   ask: (task) => ipcRenderer.invoke('ask:send', task),
