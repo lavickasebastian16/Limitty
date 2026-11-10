@@ -1,0 +1,63 @@
+name: Build iPhone .ipa
+
+# Builds an UNSIGNED Limitty.ipa on a GitHub macOS runner (which has Xcode)
+# and publishes it on the "ipa-latest" release. Install it with a sideloading
+# tool that signs it with your Apple ID (Sideloadly, AltStore, SideStore…).
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios-ipa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install xtool
+        run: brew install xtool-org/tap/xtool
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          xtool --help | head -5
+
+      - name: Run core tests
+        working-directory: ios
+        run: swift test
+
+      - name: Build unsigned .ipa
+        working-directory: ios
+        run: |
+          xtool dev build --ipa --configuration release
+          IPA=$(find xtool -name '*.ipa' -print -quit)
+          test -n "$IPA"
+          cp "$IPA" "$GITHUB_WORKSPACE/Limitty.ipa"
+          unzip -l "$GITHUB_WORKSPACE/Limitty.ipa" | grep -E 'Info.plist|appex|AppIcon' || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Limitty-ipa
+          path: Limitty.ipa
+
+      - name: Publish to the ipa-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ipa-latest --yes --cleanup-tag || true
+          gh release create ipa-latest Limitty.ipa \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Limitty iPhone app (latest build)" \
+            --notes "Unsigned build of ${GITHUB_SHA::7} from ${GITHUB_REF_NAME}. Install with Sideloadly, AltStore or SideStore. See ios/README.md."

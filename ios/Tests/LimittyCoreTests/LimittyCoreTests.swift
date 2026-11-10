@@ -79,6 +79,22 @@ final class ParsingTests: XCTestCase {
         XCTAssertEqual(SharedStore.groupCandidates(bundleID: "XTL-AB12CD.com.limitty.app.LimittyWidget"),
                        ["group.XTL-AB12CD.com.limitty.shared", "group.com.limitty.shared"])
         XCTAssertEqual(SharedStore.groupCandidates(bundleID: "com.limitty.app"), ["group.com.limitty.shared"])
+        XCTAssertEqual(SharedStore.groupCandidates(bundleID: "com.limitty.app.ABCDE12345", profileGroups: ["group.other", "group.com.limitty.shared.ABCDE12345"]).first,
+                       "group.com.limitty.shared.ABCDE12345")
+    }
+
+    func testAppGroupsFromProvisioningProfile() {
+        let plist = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <plist version="1.0"><dict><key>Entitlements</key><dict>
+        <key>com.apple.security.application-groups</key><array><string>group.com.limitty.shared.TEAM</string></array>
+        </dict></dict></plist>
+        """
+        var blob = Data([0x30, 0x82, 0x01, 0x00, 0xFF]) // fake CMS header bytes
+        blob.append(Data(plist.utf8))
+        blob.append(Data([0x00, 0xA0, 0xFF]))
+        XCTAssertEqual(SharedStore.appGroups(fromProvisioningProfile: blob), ["group.com.limitty.shared.TEAM"])
+        XCTAssertEqual(SharedStore.appGroups(fromProvisioningProfile: Data("junk".utf8)), [])
     }
 }
 
