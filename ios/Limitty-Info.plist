@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleVersion</key>
-	<string>100000</string>
+	<string>100001</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.00.000</string>
+	<string>1.00.001</string>
 	<key>CFBundleDisplayName</key>
 	<string>Limitty</string>
 	<!-- limitty://pair?… (QR code from `npm run agent:setup`) and limitty://agents (alert taps). -->
