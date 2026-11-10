@@ -6,7 +6,7 @@ See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a gla
 
 ## ⬇️ Download
 
-Every build is on the **[latest release](https://github.com/lavickasebastian16/Limitty/releases/tag/latest)**:
+Every build is on the **[latest release](https://github.com/lavickasebastian16/limitty/releases/tag/latest)**:
 
 | You have | File | Install |
 |---|---|---|
@@ -118,7 +118,7 @@ Bars turn amber at 60% and red at 85%.
 You need [Node.js](https://nodejs.org) 18 or newer.
 
 ```bash
-git clone https://github.com/lavickasebastian16/Limitty.git
+git clone https://github.com/lavickasebastian16/limitty.git
 cd Limitty
 npm install
 npm start          # opens the widget (top-right corner)
@@ -156,9 +156,9 @@ Limitty reads the logins your CLIs already store. It needs no API keys and never
 Limitty runs on Omarchy (Arch + Hyprland + Waybar):
 
 ```bash
-git clone https://github.com/lavickasebastian16/Limitty.git && cd Limitty
+git clone https://github.com/lavickasebastian16/limitty.git && cd limitty
 ./linux/omarchy-install.sh            # downloads the latest build
-# or, without cloning:  curl -fsSL https://raw.githubusercontent.com/lavickasebastian16/Limitty/HEAD/linux/omarchy-install.sh | bash
+# or, without cloning:  curl -fsSL https://raw.githubusercontent.com/lavickasebastian16/limitty/HEAD/linux/omarchy-install.sh | bash
 ./linux/omarchy-install.sh --source   # or builds it on your machine
 ```
 
@@ -213,7 +213,7 @@ scriptable/              iPhone widget as a Scriptable script
 1. Open <https://github.com/settings/applications/new>.
 2. Fill in:
    - **Application name:** `Limitty`
-   - **Homepage URL** and **Authorization callback URL:** `https://github.com/lavickasebastian16/Limitty` (the callback URL isn't used)
+   - **Homepage URL** and **Authorization callback URL:** `https://github.com/lavickasebastian16/limitty` (the callback URL isn't used)
 3. Click **Register application**. On the next page, tick **Enable Device Flow**, then click **Update application**.
 4. Copy the **Client ID** (it starts with `Ov23` or `Iv1.`). It isn't secret, and you don't need a client secret. Run `node scripts/set-github-client-id.js <Client ID>` and commit the two files it changes. GitHub then rebuilds the iPhone app with sign-in enabled.
 

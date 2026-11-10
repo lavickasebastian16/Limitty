@@ -5,7 +5,7 @@
 #   ./linux/omarchy-install.sh --source   # build it here instead (needs nodejs + npm)
 #
 # Or without cloning the repo:
-#   curl -fsSL https://raw.githubusercontent.com/lavickasebastian16/Limitty/HEAD/linux/omarchy-install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/lavickasebastian16/limitty/HEAD/linux/omarchy-install.sh | bash
 #
 # What it does: installs the Limitty package (pacman), adds the Hyprland window
 # rules + autostart (~/.config/hypr/limitty.conf or .lua), copies the Waybar
@@ -13,7 +13,7 @@
 # it edits is kept as *.limitty-backup.
 set -euo pipefail
 
-REPO="lavickasebastian16/Limitty"
+REPO="lavickasebastian16/limitty"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$HERE")"
 HYPR="${XDG_CONFIG_HOME:-$HOME/.config}/hypr"

@@ -6,7 +6,7 @@ Download the ready-made `.ipa`, or build it yourself with **[xtool](https://gith
 
 ## Easiest: install the ready-made .ipa
 
-GitHub builds `Limitty-<version>.ipa` automatically on every change. Download it from the **[latest release](https://github.com/lavickasebastian16/Limitty/releases/tag/latest)**, which also has the Linux builds. It's also attached to each run of the **Build apps** workflow under the repo's **Actions** tab.
+GitHub builds `Limitty-<version>.ipa` automatically on every change. Download it from the **[latest release](https://github.com/lavickasebastian16/limitty/releases/tag/latest)**, which also has the Linux builds. It's also attached to each run of the **Build apps** workflow under the repo's **Actions** tab.
 
 The .ipa is **unsigned**: iOS only installs apps signed for your device. A sideloading tool signs it with your (free) Apple ID and installs it:
 
@@ -52,7 +52,7 @@ Follow xtool's [Linux/Windows install guide](https://github.com/xtool-org/xtool/
 ### 3. Build and install Limitty
 
 ```bash
-git clone https://github.com/lavickasebastian16/Limitty.git
+git clone https://github.com/lavickasebastian16/limitty.git
 cd Limitty/ios
 xtool dev
 ```
