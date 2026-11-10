@@ -178,8 +178,8 @@ let modelsJSON = #"""
 final class GeminiTests: XCTestCase {
     func testGroupsModelsIntoQuotaPools() {
         let w = GeminiParser.windows(from: Data(modelsJSON.utf8))
-        XCTAssertEqual(w.map(\.label), ["Gemini Pro", "Gemini Flash", "Claude + GPT"])
-        XCTAssertEqual(w.map { $0.usedPercent.rounded() }, [40, 0, 100]) // most-used model in each pool; missing fraction = empty
+        XCTAssertEqual(w.map(\.label), ["Gemini Pro", "Gemini Flash"]) // Claude and GPT models left out
+        XCTAssertEqual(w.map { $0.usedPercent.rounded() }, [40, 0]) // most-used model in each pool
         XCTAssertEqual(w[0].resetsAt, JSON.date("2026-11-10T16:00:00Z"))
     }
 

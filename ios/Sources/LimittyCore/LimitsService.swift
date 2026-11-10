@@ -84,7 +84,6 @@ public enum SampleData {
             ProviderSnapshot(provider: .gemini, plan: "Google AI Pro", windows: [
                 LimitWindow(id: "gemini_pro", label: "Gemini Pro", usedPercent: 15, resetsAt: now.addingTimeInterval(3 * 3600)),
                 LimitWindow(id: "gemini_flash", label: "Gemini Flash", usedPercent: 4, resetsAt: now.addingTimeInterval(3 * 3600)),
-                LimitWindow(id: "claude_gpt", label: "Claude + GPT", usedPercent: 48, resetsAt: now.addingTimeInterval(3 * 3600)),
             ], fetchedAt: now),
         ]
     }

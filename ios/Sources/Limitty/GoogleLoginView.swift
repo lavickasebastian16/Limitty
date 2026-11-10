@@ -26,7 +26,7 @@ struct GoogleLoginView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("Limitty reads your **Gemini Pro**, **Gemini Flash** and **Claude + GPT** quotas from Antigravity, the same numbers as agy's /usage.")
+                    Text("Limitty reads your **Gemini Pro** and **Gemini Flash** quotas from Antigravity, the same numbers as agy's /usage.")
                     Label("This signs in as the Antigravity app, which Google's terms don't allow. Accounts have been suspended for this, so a spare Google account is safest.",
                           systemImage: "exclamationmark.triangle")
                         .font(.footnote)

@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 
-// Antigravity (agy) quota for Gemini Pro, Gemini Flash and Claude + GPT.
+// Antigravity (agy) quota for Gemini Pro and Gemini Flash.
 //
 // There's no public API for this. Like CodexBar and other community tools, we
 // sign in with Google using Antigravity's own OAuth client (an "installed app"
@@ -104,13 +104,13 @@ public enum GoogleOAuth {
 }
 
 public enum GeminiParser {
-    static let order = ["gemini_pro", "gemini_flash", "claude_gpt"]
-    static let labels = ["gemini_pro": "Gemini Pro", "gemini_flash": "Gemini Flash", "claude_gpt": "Claude + GPT"]
+    static let order = ["gemini_pro", "gemini_flash"]
+    static let labels = ["gemini_pro": "Gemini Pro", "gemini_flash": "Gemini Flash"]
 
     static func group(_ name: String) -> String? {
         let n = name.lowercased()
-        if n.contains("claude") || n.contains("gpt") { return "claude_gpt" }
-        guard n.contains("gemini") else { return nil }
+        // Only Gemini models; Antigravity's Claude and GPT models are left out.
+        guard n.contains("gemini"), !n.contains("claude"), !n.contains("gpt") else { return nil }
         return n.contains("flash") ? "gemini_flash" : "gemini_pro"
     }
 

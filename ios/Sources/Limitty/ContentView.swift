@@ -41,7 +41,7 @@ struct ContentView: View {
                         }
                     } footer: {
                         if provider.usesGoogleOAuth {
-                            Text(model.store.credential(for: provider)?.email.map { "Signed in as \($0)." } ?? "Gemini Pro, Gemini Flash and Claude + GPT quotas, as in agy's /usage.")
+                            Text(model.store.credential(for: provider)?.email.map { "Signed in as \($0)." } ?? "Gemini Pro and Gemini Flash quotas, as in agy's /usage.")
                         }
                     }
                 }

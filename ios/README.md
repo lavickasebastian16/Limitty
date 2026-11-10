@@ -69,7 +69,7 @@ The first time you open the app, iOS will say the developer is untrusted. Go to 
 2. For **Gemini**, tap **Sign in with Google**. iOS opens its secure Safari sign-in sheet; sign in and allow access. The sheet then shows "Signed in ✓" and closes.
    - **Read this first:** this signs in *as the Antigravity app*, the same way tools like CodexBar do. Google's terms don't allow that, and some people using Antigravity logins in third-party tools have had accounts suspended. **A spare Google account is safest.**
    - If the sheet doesn't come back, use **Open sign-in in Safari instead**. Safari will end on a "can't connect to localhost" page. Copy the link from the address bar and paste it into Limitty.
-   - It shows the **Gemini Pro**, **Gemini Flash** and **Claude + GPT** quotas, as in agy's `/usage`. Each pool shows its most-used model.
+   - It shows the **Gemini Pro** and **Gemini Flash** quotas, as in agy's `/usage`. Each pool shows its most-used model.
 3. Long-press your Home Screen, tap **Edit → Add Widget → Limitty**, and pick small, medium or large. Lock Screen widgets (circle, rectangle, inline) are there too.
 
 Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minutes; iOS decides exactly when. Opening the app refreshes right away. When offline, the widget keeps the last numbers for up to a day and shows a ⏱ clock icon.

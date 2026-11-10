@@ -3,7 +3,7 @@ import Foundation
 public enum Provider: String, Codable, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
-    /// Antigravity / agy quota (Gemini Pro, Gemini Flash, Claude + GPT), via Google sign-in.
+    /// Antigravity / agy quota (Gemini Pro, Gemini Flash), via Google sign-in.
     case gemini
 
     public var id: String { rawValue }
