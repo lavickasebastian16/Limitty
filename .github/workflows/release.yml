@@ -1,0 +1,98 @@
+name: Build apps
+
+# Builds every Limitty app and publishes them on the "latest" release:
+#   - iPhone: Limitty-<version>.ipa (unsigned; install with Sideloadly / AltStore / SideStore)
+#   - Linux:  AppImage, Arch package (.pacman, for Omarchy) and tar.gz
+# The version comes from limitty.json (X.XX.XXX); change it with scripts/set-version.js.
+
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - 'src/**'
+      - 'linux/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'limitty.json'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xtool
+        run: brew install xtool-org/tap/xtool
+      - name: Core tests
+        working-directory: ios
+        run: swift test
+      - name: Build unsigned .ipa
+        working-directory: ios
+        run: |
+          xtool dev build --ipa --configuration release
+          VERSION=$(node -p "require('../limitty.json').version")
+          IPA=$(find xtool -name '*.ipa' -print -quit)
+          mkdir -p ../out && cp "$IPA" "../out/Limitty-$VERSION.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: out/
+
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Packaging tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libarchive-tools
+      - run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Build AppImage, pacman and tar.gz
+        run: npm run dist:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.AppImage
+            dist/*.pacman
+            dist/*.tar.gz
+
+  publish:
+    needs: [ios, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Publish to the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(node -p "require('./limitty.json').version")
+          ls -la out
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest out/* \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "Limitty $VERSION" \
+            --notes "Limitty $VERSION (${GITHUB_SHA::7}, ${GITHUB_REF_NAME}).
+
+          - **iPhone:** \`Limitty-$VERSION.ipa\`, unsigned. Install with Sideloadly, AltStore or SideStore (see ios/README.md).
+          - **Omarchy / Arch:** \`sudo pacman -U Limitty-$VERSION-x64.pacman\`, or run \`linux/omarchy-install.sh\` (adds Hyprland rules and autostart).
+          - **Any Linux:** the AppImage (\`chmod +x\` and run) or the tar.gz."

@@ -6,7 +6,7 @@ Download the ready-made `.ipa`, or build it yourself with **[xtool](https://gith
 
 ## Easiest: install the ready-made .ipa
 
-GitHub builds `Limitty.ipa` automatically on every change to `ios/`. Download it from the **[ipa-latest release](https://github.com/lavickasebastian16/Limitty/releases/tag/ipa-latest)**. It's also attached to each run of the **Build iPhone .ipa** workflow under the repo's **Actions** tab.
+GitHub builds `Limitty-<version>.ipa` automatically on every change. Download it from the **[latest release](https://github.com/lavickasebastian16/Limitty/releases/tag/latest)**, which also has the Linux builds. It's also attached to each run of the **Build apps** workflow under the repo's **Actions** tab.
 
 The .ipa is **unsigned**: iOS only installs apps signed for your device. A sideloading tool signs it with your (free) Apple ID and installs it:
 

@@ -10,16 +10,25 @@ import FoundationNetworking
 
 public struct CompanyState: Codable, Hashable, Sendable {
     public struct Project: Codable, Hashable, Sendable { public var name: String }
+    public struct Model: Codable, Hashable, Sendable {
+        public var id: String
+        public var label: String
+        public var tier: String?
+        public var remaining: Double?
+    }
     public struct Worker: Codable, Hashable, Sendable {
         public var name: String
         public var available: Bool
         public var busy: Bool
         public var remaining: Double?
+        public var models: [Model]?
     }
 
     public var projects: [Project]
     public var workers: [String: Worker]
     public var tasks: [CompanyTask]
+    /// Which agent is the CEO.
+    public var ceo: String?
 
     public init(projects: [Project] = [], workers: [String: Worker] = [:], tasks: [CompanyTask] = []) {
         self.projects = projects
@@ -33,6 +42,8 @@ public struct CompanyState: Codable, Hashable, Sendable {
 public struct CompanyTask: Codable, Hashable, Identifiable, Sendable {
     public struct Step: Codable, Hashable, Sendable {
         public var worker: String
+        public var model: String?
+        public var modelLabel: String?
         public var title: String
         public var status: String
         public var output: String?

@@ -380,7 +380,7 @@ final class GitHubTests: XCTestCase {
 final class Box: @unchecked Sendable { var values: [Double] = [] }
 
 final class CompanyTests: XCTestCase {
-    let tasksJSON = #"{"v":1,"projects":[{"name":"my-website"}],"workers":{"claude":{"name":"Claude Code","available":true,"busy":false,"remaining":40},"codex":{"name":"Codex","available":true,"busy":true,"remaining":null},"agy":{"name":"Antigravity","available":false,"busy":false,"remaining":null}},"tasks":[{"id":"t1","title":"Add dark mode","project":"my-website","worker":"auto","source":"phone","status":"running","error":null,"createdAt":1794310000,"updatedAt":1794310050,"plan":{"summary":"Codex builds it","by":"claude","steps":[{"worker":"codex","title":"Build","status":"running","output":"","startedAt":1794310040,"finishedAt":null}]}}]}"#
+    let tasksJSON = #"{"v":1,"projects":[{"name":"my-website"}],"workers":{"claude":{"name":"Claude Code","available":true,"busy":false,"remaining":40},"codex":{"name":"Codex","available":true,"busy":true,"remaining":null},"agy":{"name":"Antigravity","available":false,"busy":false,"remaining":null}},"tasks":[{"id":"t1","title":"Add dark mode","project":"my-website","worker":"auto","source":"phone","status":"running","error":null,"createdAt":1794310000,"updatedAt":1794310050,"plan":{"summary":"Codex builds it","by":"claude","steps":[{"worker":"codex","model":"high","modelLabel":"high effort","title":"Build","status":"running","output":"","startedAt":1794310040,"finishedAt":null}]}}],"ceo":"claude"}"#
 
     func testReadsStatusAndTasksInOneRequest() async throws {
         let escaped = tasksJSON.replacingOccurrences(of: "\"", with: "\\\"")
@@ -394,6 +394,8 @@ final class CompanyTests: XCTestCase {
         XCTAssertEqual(t.statusLabel, "Working")
         XCTAssertTrue(t.isActive)
         XCTAssertEqual(t.plan?.steps.first?.worker, "codex")
+        XCTAssertEqual(t.plan?.steps.first?.modelLabel, "high effort")
+        XCTAssertEqual(r.company?.ceo, "claude")
         XCTAssertEqual(http.calls.count, 1)
     }
 

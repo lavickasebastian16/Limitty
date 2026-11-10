@@ -1,0 +1,5 @@
+/* Limitty module colours: add to ~/.config/waybar/style.css */
+#custom-limitty { margin: 0 8px; }
+#custom-limitty.warning { color: #f2b33d; }
+#custom-limitty.critical { color: #f2555a; }
+#custom-limitty.attention { color: #f26a33; font-weight: bold; }

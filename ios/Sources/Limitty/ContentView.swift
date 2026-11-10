@@ -49,10 +49,16 @@ struct ContentView: View {
                     }
                 }
 
-                Section("Widget") {
+                Section {
                     Text("Long-press your Home Screen, tap Edit → Add Widget, and choose **Limitty**. Lock Screen widgets are available too.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                } header: {
+                    Text("Widget")
+                } footer: {
+                    Text("Limitty \(limittyVersion)")
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
                 }
             }
             .navigationTitle("Limitty")

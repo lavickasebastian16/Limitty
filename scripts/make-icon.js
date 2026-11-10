@@ -50,4 +50,5 @@ const root = path.join(__dirname, '..');
 fs.writeFileSync(path.join(root, 'assets', 'tray.png'), png(32, null));
 fs.mkdirSync(path.join(root, 'ios', 'Resources'), { recursive: true });
 fs.writeFileSync(path.join(root, 'ios', 'Resources', 'AppIcon.png'), png(1024, [22, 22, 25, 255]));
-console.log('wrote assets/tray.png and ios/Resources/AppIcon.png');
+fs.writeFileSync(path.join(root, 'assets', 'icon.png'), png(512, [22, 22, 25, 255])); // Linux app icon
+console.log('wrote assets/tray.png, assets/icon.png and ios/Resources/AppIcon.png');

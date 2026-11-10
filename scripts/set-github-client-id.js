@@ -11,7 +11,10 @@ if (!/^[A-Za-z0-9._-]{10,40}$/.test(id)) {
   process.exit(1);
 }
 const root = path.join(__dirname, '..');
-fs.writeFileSync(path.join(root, 'limitty.json'), `${JSON.stringify({ githubClientId: id }, null, 2)}\n`);
+const metaFile = path.join(root, 'limitty.json');
+const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+meta.githubClientId = id;
+fs.writeFileSync(metaFile, `${JSON.stringify(meta, null, 2)}\n`);
 const swift = path.join(root, 'ios', 'Sources', 'LimittyCore', 'GitHubClientID.swift');
 fs.writeFileSync(swift, `// Set with: node scripts/set-github-client-id.js <client-id>\npublic let limittyGitHubClientID = "${id}"\n`);
 console.log(`Saved. Commit limitty.json and ${path.relative(root, swift)}, then rebuild the iPhone app.`);

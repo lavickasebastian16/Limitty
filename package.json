@@ -1,6 +1,6 @@
 {
   "name": "limitty",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Claude, Codex and Antigravity (agy) usage limits and agent status: desktop widget, iPhone app, and a PC companion.",
   "main": "src/main.js",
   "license": "MIT",
@@ -10,10 +10,12 @@
     "agent": "node src/agents/cli.js run",
     "agent:setup": "node src/agents/cli.js setup",
     "agent:status": "node src/agents/cli.js status",
-    "test": "node --test"
+    "test": "node --test",
+    "dist:linux": "LIMITTY_VERSION=$(node -p \"require('./limitty.json').version\") electron-builder --linux"
   },
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^26.18.0"
   },
   "engines": {
     "node": ">=18"
@@ -24,5 +26,54 @@
   },
   "bin": {
     "limitty-agent": "src/agents/cli.js"
-  }
+  },
+  "productName": "Limitty",
+  "homepage": "https://github.com/lavickasebastian16/Limitty",
+  "author": {
+    "name": "Limitty"
+  },
+  "build": {
+    "appId": "com.limitty.desktop",
+    "productName": "Limitty",
+    "executableName": "limitty",
+    "artifactName": "Limitty-${env.LIMITTY_VERSION}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "limitty.json",
+      "package.json",
+      "!**/*.test.js"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "pacman",
+        "tar.gz"
+      ],
+      "category": "Utility",
+      "icon": "assets/icon.png",
+      "synopsis": "Usage limits and an AI team for Claude Code, Codex and Antigravity",
+      "description": "Desktop widget for Claude, Codex and Antigravity (agy) usage limits, agent status relay to your iPhone, and Company mode: an AI CEO that hands your tasks to your coding agents.",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "limitty",
+          "Name": "Limitty"
+        }
+      },
+      "maintainer": "Limitty <limitty@users.noreply.github.com>",
+      "syncDesktopName": true
+    },
+    "pacman": {
+      "depends": [
+        "gtk3",
+        "nss",
+        "alsa-lib",
+        "libnotify"
+      ]
+    }
+  },
+  "desktopName": "limitty.desktop"
 }

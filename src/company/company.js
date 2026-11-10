@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { EventEmitter } = require('events');
 const { TaskStore } = require('./store');
-const { WORKERS, run, isInstalled } = require('./workers');
+const { WORKERS, run, isInstalled, modelsFor } = require('./workers');
 const { makePlan } = require('./ceo');
 
 const { FILES } = require('../agents/config');
@@ -179,7 +179,9 @@ class Company extends EventEmitter {
       projects: this.projects().map((p) => ({ name: p.name })),
       workers: Object.fromEntries(Object.entries(WORKERS).map(([id, w]) => [id, {
         name: w.name, available: team[id].available, busy: team[id].busy, remaining: team[id].remaining,
+        models: team[id].models.map((m) => ({ id: m.id, label: m.label, tier: m.tier, remaining: m.remaining })),
       }])),
+      ceo: this.ceo,
       tasks: this.store.tasks.slice(0, 30).map((t) => ({
         id: t.id,
         title: t.title,
@@ -194,7 +196,8 @@ class Company extends EventEmitter {
           summary: t.plan.summary,
           by: t.plan.by,
           steps: t.plan.steps.map((s) => ({
-            worker: s.worker, title: s.title, status: s.status,
+            worker: s.worker, model: s.model || null, modelLabel: modelLabel(s.worker, s.model, this.workerOptions),
+            title: s.title, status: s.status,
             output: (s.output || '').slice(-1500),
             startedAt: s.startedAt && Math.round(s.startedAt / 1000),
             finishedAt: s.finishedAt && Math.round(s.finishedAt / 1000),
@@ -211,14 +214,25 @@ class Company extends EventEmitter {
 
   // ───── the work ─────
 
+  /**
+   * Each worker: installed?, busy?, % left on its tightest limit, and its models
+   * with their own % left (Claude's per-model weekly limits, Gemini Pro/Flash quotas).
+   */
   team() {
     const limits = this.limitCache.value;
     return Object.fromEntries(Object.keys(WORKERS).map((id) => {
-      const remaining = limits[id] ?? null;
+      const l = normalizeLimit(limits[id]);
+      const models = modelsFor(id, this.workerOptions).map((m) => {
+        const own = m.limit && l.models[m.limit] != null ? l.models[m.limit] : null;
+        const remaining = own != null && l.overall != null ? Math.min(own, l.overall) : (own ?? l.overall);
+        return { ...m, remaining };
+      });
+      const roomy = models.some((m) => m.remaining == null || m.remaining > 1);
       return [id, {
-        available: this.installed(id) && (remaining == null || remaining > 1),
+        available: this.installed(id) && (l.overall == null || l.overall > 1) && roomy,
         busy: this.busyWorkers.has(id),
-        remaining,
+        remaining: l.overall,
+        models,
       }];
     }));
   }
@@ -254,7 +268,7 @@ class Company extends EventEmitter {
   plan(task) {
     this.store.update(task.id, (t) => { t.status = 'planning'; });
     this.changed();
-    const job = makePlan(task, this.team(), { ceo: this.ceo, runImpl: this.runImpl });
+    const job = makePlan(task, this.team(), { ceo: this.ceo, runImpl: this.runImpl, opts: this.workerOptions });
     this.jobs.set(task.id, job);
     job.plan.then((plan) => {
       this.jobs.delete(task.id);
@@ -277,7 +291,7 @@ class Company extends EventEmitter {
   runStep(task, i) {
     const step = task.plan.steps[i];
     const earlier = task.plan.steps.slice(0, i)
-      .map((s) => `- Step ${s.id} (${WORKERS[s.worker].name}): ${s.title}\n  Result: ${(s.output || '').slice(-800)}`)
+      .map((s) => `- Step ${s.id} (${WORKERS[s.worker].name}${s.model ? `, ${s.model}` : ''}): ${s.title}\n  Result: ${(s.output || '').slice(-800)}`)
       .join('\n');
     const instruction = `${step.instruction}\n\n(This is step ${i + 1} of ${task.plan.steps.length} for the task: "${task.title}".`
       + `${earlier ? `\nEarlier steps:\n${earlier}` : ''})`;
@@ -291,6 +305,7 @@ class Company extends EventEmitter {
     const job = this.runImpl(step.worker, instruction, {
       cwd: task.project.path,
       mode: 'work',
+      model: step.model,
       opts: this.workerOptions,
       onOutput: (out) => {
         // Live output, saved at most every 10 s.
@@ -327,16 +342,53 @@ class Company extends EventEmitter {
   }
 }
 
-/** % left on each worker's tightest usage limit, from Limitty's limit readers. */
+/** Accepts a number (old format) or { overall, models }. */
+function normalizeLimit(v) {
+  if (v == null) return { overall: null, models: {} };
+  if (typeof v === 'number') return { overall: v, models: {} };
+  return { overall: v.overall ?? null, models: v.models || {} };
+}
+
+function modelLabel(worker, model, opts) {
+  if (!model) return null;
+  return modelsFor(worker, opts).find((m) => m.id === model)?.label || model;
+}
+
+/**
+ * % left per worker, from Limitty's own limit readers:
+ * { claude: { overall, models: { opus, sonnet } }, codex: { overall }, agy: { overall, models: { pro, flash } } }
+ */
 async function defaultLimits() {
   const { fetchAll } = require('../providers');
   const results = await fetchAll(Object.values(PROVIDER_FOR));
+  return limitsFromResults(results);
+}
+
+function limitsFromResults(results) {
+  const left = (windows) => (windows.length ? 100 - Math.max(...windows.map((w) => w.usedPercent ?? 0)) : null);
   const out = {};
-  for (const [worker, provider] of Object.entries(PROVIDER_FOR)) {
-    const r = results.find((x) => x.id === provider);
-    if (r?.ok && r.windows.length) out[worker] = 100 - Math.max(...r.windows.map((w) => w.usedPercent ?? 0));
+  const claude = results.find((r) => r.id === 'claude');
+  if (claude?.ok) {
+    const general = claude.windows.filter((w) => w.id === 'five_hour' || w.id === 'seven_day');
+    out.claude = {
+      overall: left(general.length ? general : claude.windows),
+      models: {
+        opus: left(claude.windows.filter((w) => w.id === 'seven_day_opus')),
+        sonnet: left(claude.windows.filter((w) => w.id === 'seven_day_sonnet')),
+      },
+    };
+  }
+  const codex = results.find((r) => r.id === 'codex');
+  if (codex?.ok) out.codex = { overall: left(codex.windows), models: {} };
+  const ag = results.find((r) => r.id === 'antigravity');
+  if (ag?.ok) {
+    const name = (w) => String(w.label).toLowerCase();
+    const pro = left(ag.windows.filter((w) => name(w).includes('gemini') && !name(w).includes('flash')));
+    const flash = left(ag.windows.filter((w) => name(w).includes('gemini') && name(w).includes('flash')));
+    const best = [pro, flash].filter((x) => x != null);
+    out.agy = { overall: best.length ? Math.max(...best) : left(ag.windows), models: { pro, flash } };
   }
   return out;
 }
 
-module.exports = { Company, defaultLimits, LOCAL_INBOX };
+module.exports = { Company, defaultLimits, limitsFromResults, LOCAL_INBOX };

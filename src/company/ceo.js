@@ -1,24 +1,28 @@
 'use strict';
 
 // The CEO: reads a task, splits it into steps if useful, and hands each step to
-// the best worker, preferring whoever has the most usage limit left.
+// the best worker and model, weighing how hard the step is against how much usage
+// limit each model has left. The CEO is on the team too and can take steps itself.
 
 const fs = require('fs');
-const path = require('path');
 const { WORKERS, run } = require('./workers');
 
 const MAX_STEPS = 4;
+const LOW_LIMIT = 15; // % left below which a model is avoided if possible
+const TIER_ORDER = { strongest: 0, balanced: 1, fast: 2 };
 
 /**
- * Team info for planning: { claude: { available, busy, remaining }, ... }.
- * `remaining` is the % left on the worker's tightest limit (null if unknown).
+ * team: { claude: { available, busy, remaining, models: [{ id, label, tier, remaining }] }, … }
+ * `remaining` = % left on the tightest limit (null if unknown).
  */
-function describeTeam(team) {
+function describeTeam(team, ceo) {
   return Object.entries(WORKERS).map(([id, w]) => {
     const t = team[id] || {};
-    if (!t.available) return `- ${id} (${w.name}): NOT AVAILABLE`;
+    const me = id === ceo ? ' ← this is you, the CEO; you may take steps yourself' : '';
+    if (!t.available) return `- ${id} (${w.name}): NOT AVAILABLE${me}`;
+    const models = (t.models || []).map((m) => `${m.id} [${m.tier}${m.remaining == null ? '' : `, ${Math.round(m.remaining)}% left`}]`).join(', ');
     const left = t.remaining == null ? 'limit unknown' : `${Math.round(t.remaining)}% of its usage limit left`;
-    return `- ${id} (${w.name}): ${left}${t.busy ? ', currently busy' : ''}. Good at ${w.strengths}.`;
+    return `- ${id} (${w.name})${me}: ${left}${t.busy ? ', currently busy' : ''}. Good at ${w.strengths}. Models: ${models}.`;
   }).join('\n');
 }
 
@@ -34,52 +38,71 @@ function projectOverview(dir) {
   }
 }
 
-function prompt(task, team) {
-  return `You are the CEO of a small software team working on this PC. Plan this task and assign it to your workers.
+function prompt(task, team, ceo = 'claude') {
+  return `You are the CEO of a small software team working on this PC. You are ${WORKERS[ceo]?.name || ceo}. Plan this task, and assign each step to a worker and a model. You are also a worker: assign steps to yourself when you're the best fit.
 
 Task: ${task.title}
 Project: ${task.project.name} (${task.project.path})
 Top-level files: ${projectOverview(task.project.path)}
 
-Workers:
-${describeTeam(team)}
+Team (usage limits are live):
+${describeTeam(team, ceo)}
 
 Rules:
 - Use ONE step unless the task clearly has separate parts; never more than ${MAX_STEPS} steps.
 - Steps run in order, in the project folder; each worker sees the results of earlier steps.
-- Only assign available workers. Among suitable workers, prefer the one with the most limit left.
+- Only assign available workers and models from their list.
+- Match the model to the work: "strongest" for hard design, tricky bugs or large refactors; "balanced" for normal coding; "fast" for small edits, docs, formatting or simple questions. Don't use a stronger model than the step needs.
+- Spread work by usage limits: prefer workers and models with more limit left, and avoid any model under ${LOW_LIMIT}% left unless nothing else can do it.
 - Each instruction must be complete and self-contained: the worker sees only that instruction and earlier results.
-- You may look at files to plan, but do not change anything.
+- You may look at files to plan, but do not change anything now.
 
 Reply with ONLY this JSON, nothing else:
-{"summary": "one sentence plan", "steps": [{"worker": "claude|codex|agy", "title": "short step name", "instruction": "full instruction"}]}`;
+{"summary": "one sentence plan, including why these workers/models", "steps": [{"worker": "claude|codex|agy", "model": "model id from the list", "title": "short step name", "instruction": "full instruction"}]}`;
 }
 
-/** Pulls the plan JSON out of the CEO's reply. */
-function parsePlan(text, available) {
+/** The model to use when none (or an invalid one) was chosen: balanced if it has room, else the roomiest. */
+function pickModel(info, preferTier = 'balanced') {
+  const models = info?.models || [];
+  if (!models.length) return null;
+  const roomy = (m) => m.remaining == null || m.remaining >= LOW_LIMIT;
+  const byTier = [...models].sort((a, b) => Math.abs(TIER_ORDER[a.tier] - TIER_ORDER[preferTier]) - Math.abs(TIER_ORDER[b.tier] - TIER_ORDER[preferTier]));
+  return (byTier.find(roomy) || [...models].sort((a, b) => (b.remaining ?? 50) - (a.remaining ?? 50))[0]).id;
+}
+
+/** Pulls the plan JSON out of the CEO's reply and checks workers and models. */
+function parsePlan(text, team) {
+  const available = Object.keys(WORKERS).filter((id) => team[id]?.available);
   const s = String(text || '');
   const start = s.indexOf('{');
   const end = s.lastIndexOf('}');
-  if (start === -1 || end <= start) return null;
+  if (start === -1 || end <= start || !available.length) return null;
   let j;
   try { j = JSON.parse(s.slice(start, end + 1)); } catch { return null; }
   const steps = (Array.isArray(j.steps) ? j.steps : [])
     .filter((st) => st && typeof st.instruction === 'string' && st.instruction.trim())
     .slice(0, MAX_STEPS)
-    .map((st) => ({
-      worker: available.includes(st.worker) ? st.worker : available[0],
-      title: String(st.title || st.instruction).slice(0, 80),
-      instruction: st.instruction.trim(),
-    }));
+    .map((st) => {
+      const worker = available.includes(st.worker) ? st.worker : pickWorker(team);
+      const models = team[worker]?.models || [];
+      const model = models.some((m) => m.id === st.model) ? st.model : pickModel(team[worker]);
+      return { worker, model, title: String(st.title || st.instruction).slice(0, 80), instruction: st.instruction.trim() };
+    });
   if (!steps.length) return null;
-  return { summary: String(j.summary || '').slice(0, 300), steps };
+  return { summary: String(j.summary || '').slice(0, 400), steps };
 }
 
 /** Without AI: one step for the free, available worker with the most limit left. */
 function rulePlan(task, team) {
   const worker = pickWorker(team);
   if (!worker) return null;
-  return { summary: `Assigned to ${WORKERS[worker].name} (most limit left).`, by: 'rules', steps: [{ worker, title: task.title.slice(0, 80), instruction: task.title }] };
+  const model = pickModel(team[worker]);
+  const label = team[worker].models?.find((m) => m.id === model)?.label;
+  return {
+    summary: `Assigned to ${WORKERS[worker].name}${label ? ` (${label})` : ''}: most usage limit left.`,
+    by: 'rules',
+    steps: [{ worker, model, title: task.title.slice(0, 80), instruction: task.title }],
+  };
 }
 
 function pickWorker(team, exclude = []) {
@@ -94,19 +117,26 @@ function pickWorker(team, exclude = []) {
  * available or its answer can't be used, falls back to the rules.
  * Returns { plan, cancel }.
  */
-function makePlan(task, team, { ceo = 'claude', runImpl = run } = {}) {
-  const available = Object.keys(WORKERS).filter((id) => team[id]?.available);
+function makePlan(task, team, { ceo = 'claude', runImpl = run, opts = {} } = {}) {
   if (task.worker && task.worker !== 'auto') {
-    // You picked the worker: no planning needed.
-    const plan = { summary: `Assigned to ${WORKERS[task.worker].name} (your choice).`, by: 'you', steps: [{ worker: task.worker, title: task.title.slice(0, 80), instruction: task.title }] };
+    // You picked the worker: no planning needed; the model still follows the limits.
+    const model = pickModel(team[task.worker]);
+    const label = team[task.worker]?.models?.find((m) => m.id === model)?.label;
+    const plan = {
+      summary: `Assigned to ${WORKERS[task.worker].name}${label ? ` (${label})` : ''}: your choice.`,
+      by: 'you',
+      steps: [{ worker: task.worker, model, title: task.title.slice(0, 80), instruction: task.title }],
+    };
     return { plan: Promise.resolve(plan), cancel: () => {} };
   }
   const planner = ceo !== 'rules' && team[ceo]?.available ? ceo : null;
   if (!planner) return { plan: Promise.resolve(rulePlan(task, team)), cancel: () => {} };
 
-  const job = runImpl(planner, prompt(task, team), { cwd: task.project.path, mode: 'plan', timeoutMs: 5 * 60_000 });
+  // Planning is light work: use the CEO's fast-ish model to save its limit.
+  const planModel = pickModel(team[planner], 'balanced');
+  const job = runImpl(planner, prompt(task, team, planner), { cwd: task.project.path, mode: 'plan', timeoutMs: 5 * 60_000, model: planModel, opts });
   const plan = job.promise.then((r) => {
-    const p = r.ok ? parsePlan(r.text, available) : null;
+    const p = r.ok ? parsePlan(r.text, team) : null;
     if (p) return { ...p, by: planner };
     const fallback = rulePlan(task, team);
     if (fallback) fallback.summary += ` (The ${WORKERS[planner].name} CEO couldn't plan: ${r.ok ? 'unclear answer' : r.text.slice(0, 120)})`;
@@ -115,4 +145,4 @@ function makePlan(task, team, { ceo = 'claude', runImpl = run } = {}) {
   return { plan, cancel: job.cancel };
 }
 
-module.exports = { makePlan, parsePlan, rulePlan, pickWorker, prompt, MAX_STEPS };
+module.exports = { makePlan, parsePlan, rulePlan, pickWorker, pickModel, prompt, MAX_STEPS, LOW_LIMIT };

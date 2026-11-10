@@ -56,3 +56,5 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--bg); bord
 .empty { color: var(--muted); text-align: center; padding: 30px; }
 .spin { display: inline-block; width: 9px; height: 9px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 4px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+#version { text-align: center; margin-top: 24px; }
+.ceo { font-size: 9.5px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; margin-left: 2px; }

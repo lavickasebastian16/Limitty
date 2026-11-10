@@ -18,6 +18,7 @@ let tray = null;
 let timer = null;
 let lastResults = [];
 let config = { ...DEFAULTS };
+const VERSION = (() => { try { return require('../limitty.json').version; } catch { return app.getVersion(); } })();
 let host = null; // runs the Company + phone relay (or { owner: false } if another process does)
 let companyWin = null;
 
@@ -40,6 +41,7 @@ function createWindow() {
   const y = config.y ?? workArea.y + 16;
 
   win = new BrowserWindow({
+    title: 'Limitty', // Hyprland window rules match this title
     width,
     height: 360,
     x,
@@ -84,6 +86,8 @@ function buildTrayMenu() {
     return { label: `${r.name}: ${Math.round(top)}% used`, enabled: false };
   });
   return Menu.buildFromTemplate([
+    { label: `Limitty ${VERSION}`, enabled: false },
+    { type: 'separator' },
     ...summary,
     ...(summary.length ? [{ type: 'separator' }] : []),
     { label: win?.isVisible() ? 'Hide widget' : 'Show widget', click: toggleWindow },
@@ -125,8 +129,8 @@ function buildTrayMenu() {
     {
       label: 'Start at login',
       type: 'checkbox',
-      checked: app.getLoginItemSettings().openAtLogin,
-      click: (item) => app.setLoginItemSettings({ openAtLogin: item.checked }),
+      checked: getStartAtLogin(),
+      click: (item) => setStartAtLogin(item.checked),
     },
     { label: 'Reset position', click: () => { config.x = null; config.y = null; saveConfig(); placeDefault(); } },
     { type: 'separator' },
@@ -186,7 +190,7 @@ async function connectAgents() {
         });
       },
     });
-    app.setLoginItemSettings({ openAtLogin: true }); // keep the relay running after restarts
+    setStartAtLogin(true); // keep the relay running after restarts
     host?.attachRelay?.();
     const failed = results.filter(([, ok]) => !ok).map(([name, , msg]) => `${name}: ${msg}`);
     dialog.showMessageBox({
@@ -247,7 +251,7 @@ function companyRequest(req) {
 }
 
 function setupCompanyIpc() {
-  ipcMain.handle('company:state', () => companyState());
+  ipcMain.handle('company:state', () => ({ ...companyState(), version: VERSION }));
   ipcMain.handle('company:create', (_e, { title, project, worker }) => companyRequest({ kind: 'create', title, project, worker }));
   for (const kind of ['cancel', 'retry', 'remove']) {
     ipcMain.handle(`company:${kind}`, (_e, task) => companyRequest({ kind, task }));
@@ -303,10 +307,44 @@ function schedule() {
   timer = setInterval(refresh, Math.max(1, config.refreshMinutes) * 60 * 1000);
 }
 
-if (!app.requestSingleInstanceLock()) {
+// ───── Start at login (Electron's own setting only works on macOS and Windows) ─────
+
+const AUTOSTART_FILE = path.join(app.getPath('home'), '.config', 'autostart', 'limitty.desktop');
+
+function getStartAtLogin() {
+  if (process.platform === 'linux') return fs.existsSync(AUTOSTART_FILE);
+  return app.getLoginItemSettings().openAtLogin;
+}
+
+function setStartAtLogin(on) {
+  if (process.platform !== 'linux') { app.setLoginItemSettings({ openAtLogin: on }); return; }
+  if (!on) { fs.rmSync(AUTOSTART_FILE, { force: true }); return; }
+  // AppImage: the AppImage file itself; installed package / dev: the executable (+ app folder in dev).
+  const exec = process.env.APPIMAGE ? `"${process.env.APPIMAGE}"`
+    : app.isPackaged ? `"${process.execPath}"` : `"${process.execPath}" "${app.getAppPath()}"`;
+  fs.mkdirSync(path.dirname(AUTOSTART_FILE), { recursive: true });
+  fs.writeFileSync(AUTOSTART_FILE, `[Desktop Entry]\nType=Application\nName=Limitty\nComment=Usage limits and agent status\nExec=${exec}\nIcon=limitty\nTerminal=false\nX-GNOME-Autostart-enabled=true\n`);
+}
+
+// ───── Command-line switches (handy for Hyprland keybinds and Waybar) ─────
+//   limitty --company   open the Company window
+//   limitty --toggle    show/hide the widget
+//   limitty --waybar    print usage limits as Waybar JSON and exit
+
+function handleArgs(argv) {
+  if (argv.includes('--company')) openCompany();
+  else if (argv.includes('--toggle')) toggleWindow();
+  else if (win) win.showInactive();
+}
+
+if (process.platform === 'linux') app.commandLine.appendSwitch('enable-transparent-visuals');
+
+if (process.argv.includes('--waybar')) {
+  require('./waybar').print().finally(() => app.exit(0));
+} else if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => { if (win) win.showInactive(); });
+  app.on('second-instance', (_e, argv) => handleArgs(argv));
 
   app.whenReady().then(() => {
     if (process.platform === 'darwin') app.dock?.hide();
@@ -337,6 +375,7 @@ if (!app.requestSingleInstanceLock()) {
     schedule();
 
     startHost();
+    if (process.argv.includes('--company')) openCompany();
   });
 
   app.on('before-quit', () => host?.stop?.());

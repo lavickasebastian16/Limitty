@@ -9,9 +9,9 @@ const path = require('path');
 const HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'limitty-co-'));
 process.env.LIMITTY_HOME = path.join(HOME, '.limitty');
 
-const { Company } = require('../src/company/company');
+const { Company, limitsFromResults } = require('../src/company/company');
 const { TaskStore } = require('../src/company/store');
-const { parsePlan, pickWorker } = require('../src/company/ceo');
+const { parsePlan, pickWorker, pickModel, prompt } = require('../src/company/ceo');
 const { command } = require('../src/company/workers');
 
 const PROJECT = fs.mkdtempSync(path.join(HOME, 'site-'));
@@ -19,8 +19,8 @@ const PROJECT = fs.mkdtempSync(path.join(HOME, 'site-'));
 /** Fake workers: records prompts; answers come from `script(worker, prompt, mode)`. */
 function fakeRun(script) {
   const calls = [];
-  const runImpl = (worker, prompt, { mode, cwd }) => {
-    calls.push({ worker, mode, prompt, cwd });
+  const runImpl = (worker, prompt, { mode, cwd, model }) => {
+    calls.push({ worker, mode, prompt, cwd, model });
     let cancel;
     const promise = new Promise((resolve) => {
       const r = script(worker, prompt, mode);
@@ -49,7 +49,7 @@ function company(script, { installed = () => true, limits = async () => ({ claud
 
 test('AI CEO plans, workers run the steps in order, results flow to the next step', async () => {
   const plan = JSON.stringify({ summary: 'Build then test', steps: [
-    { worker: 'codex', title: 'Add dark mode', instruction: 'Add a dark mode toggle' },
+    { worker: 'codex', model: 'high', title: 'Add dark mode', instruction: 'Add a dark mode toggle' },
     { worker: 'agy', title: 'Polish UI', instruction: 'Polish the toggle styling' },
   ] });
   const { c, calls } = company((worker, prompt, mode) => (mode === 'plan'
@@ -68,6 +68,10 @@ test('AI CEO plans, workers run the steps in order, results flow to the next ste
   assert.deepStrictEqual(done.plan.steps.map((s) => [s.worker, s.status, s.output]), [['codex', 'done', 'codex finished'], ['agy', 'done', 'agy finished']]);
   assert.strictEqual(calls[0].mode, 'plan');
   assert.match(calls[0].prompt, /codex \(Codex\): 90% of its usage limit left/);
+  assert.deepStrictEqual(done.plan.steps.map((s) => s.model), ['high', 'default']);
+  assert.strictEqual(calls[1].model, 'high'); // the worker was run with the CEO's model choice
+  assert.strictEqual(calls[0].model, 'sonnet'); // planning uses the CEO's balanced model
+  assert.strictEqual(c.snapshot().tasks[0].plan.steps[0].modelLabel, 'high effort');
   assert.match(calls[2].prompt, /Earlier steps:[\s\S]*codex finished/);
   assert.strictEqual(calls[1].cwd, PROJECT);
   assert.deepStrictEqual(alerts, ['done']);
@@ -147,18 +151,63 @@ test('interrupted tasks are marked failed after a restart', () => {
   assert.match(s2.get(t.id).error, /Interrupted/);
 });
 
-test('plan parsing and worker commands', () => {
-  assert.strictEqual(parsePlan('no json', ['claude']), null);
-  const p = parsePlan('```json\n{"summary":"s","steps":[{"worker":"gpt","instruction":"do it"}]}\n```', ['codex']);
-  assert.strictEqual(p.steps[0].worker, 'codex'); // unknown worker → first available
+test('plan parsing checks workers and models', () => {
+  const team = {
+    claude: { available: false, models: [] },
+    codex: { available: true, busy: false, remaining: 80, models: [{ id: 'high', tier: 'strongest', remaining: 80 }, { id: 'medium', tier: 'balanced', remaining: 80 }, { id: 'low', tier: 'fast', remaining: 80 }] },
+    agy: { available: false, models: [] },
+  };
+  assert.strictEqual(parsePlan('no json', team), null);
+  const p = parsePlan('```json\n{"summary":"s","steps":[{"worker":"gpt","model":"turbo","instruction":"do it"}]}\n```', team);
+  assert.deepStrictEqual([p.steps[0].worker, p.steps[0].model], ['codex', 'medium']); // unknown worker/model → sensible defaults
+  const q = parsePlan('{"steps":[{"worker":"codex","model":"low","instruction":"fix typo"}]}', team);
+  assert.strictEqual(q.steps[0].model, 'low');
   assert.strictEqual(pickWorker({ claude: { available: true, busy: true, remaining: 99 }, codex: { available: true, busy: false, remaining: 10 }, agy: { available: false } }), 'codex');
+});
 
-  const claude = command('claude', 'hi', 'work');
-  assert.deepStrictEqual(claude.args.slice(0, 3), ['-p', '--output-format', 'json']);
+test('model choice avoids models that are nearly out of limit', () => {
+  const info = { models: [{ id: 'opus', tier: 'strongest', remaining: 60 }, { id: 'sonnet', tier: 'balanced', remaining: 5 }, { id: 'haiku', tier: 'fast', remaining: 60 }] };
+  assert.ok(['opus', 'haiku'].includes(pickModel(info)), 'balanced model is at 5%, so a neighbour is used');
+  assert.strictEqual(pickModel({ models: [{ id: 'a', tier: 'balanced', remaining: 3 }, { id: 'b', tier: 'fast', remaining: 9 }] }), 'b');
+});
+
+test('team shows per-model limits; CEO prompt lists models and that it can work', () => {
+  const { c } = company(() => 'hang');
+  c.limitCache = { at: Date.now(), value: { claude: { overall: 70, models: { opus: 10, sonnet: 50 } }, codex: { overall: 90, models: {} }, agy: { overall: 40, models: { pro: 20, flash: 40 } } } };
+  const team = c.team();
+  assert.deepStrictEqual(team.claude.models.map((m) => [m.id, m.remaining]), [['opus', 10], ['sonnet', 50], ['haiku', 70]]);
+  assert.deepStrictEqual(team.agy.models.map((m) => m.id), ['default']); // agy models need slugs in settings
+  c.workerOptions = { agyModels: { pro: 'gemini-pro-slug', flash: 'gemini-flash-slug' } };
+  assert.deepStrictEqual(c.team().agy.models.map((m) => [m.id, m.remaining]), [['pro', 20], ['flash', 40]]);
+  const text = prompt({ title: 't', project: { name: 'p', path: PROJECT } }, c.team(), 'claude');
+  assert.match(text, /claude \(Claude Code\) ← this is you, the CEO/);
+  assert.match(text, /opus \[strongest, 10% left\]/);
+  assert.match(text, /"model": "model id from the list"/);
+  c.stop();
+});
+
+test('limits from Limitty\'s readers become per-model limits', () => {
+  const lim = limitsFromResults([
+    { id: 'claude', ok: true, windows: [{ id: 'five_hour', usedPercent: 30 }, { id: 'seven_day', usedPercent: 50 }, { id: 'seven_day_opus', usedPercent: 95 }] },
+    { id: 'codex', ok: true, windows: [{ id: 'primary', usedPercent: 10 }, { id: 'secondary', usedPercent: 40 }] },
+    { id: 'antigravity', ok: true, windows: [{ label: 'Gemini Pro', usedPercent: 80 }, { label: 'Gemini Flash', usedPercent: 10 }, { label: 'Claude + GPT', usedPercent: 0 }] },
+  ]);
+  assert.deepStrictEqual(lim.claude, { overall: 50, models: { opus: 5, sonnet: null } });
+  assert.deepStrictEqual(lim.codex, { overall: 60, models: {} });
+  assert.deepStrictEqual(lim.agy, { overall: 90, models: { pro: 20, flash: 90 } });
+});
+
+test('worker commands carry the chosen model', () => {
+  const claude = command('claude', 'hi', 'work', {}, 'opus');
+  assert.deepStrictEqual(claude.args.slice(0, 5), ['-p', '--output-format', 'json', '--model', 'opus']);
   assert.ok(claude.args.includes('acceptEdits'));
   assert.strictEqual(claude.stdin, 'hi');
   assert.deepStrictEqual(claude.parse('{"type":"result","result":"Done!","is_error":false}'), { text: 'Done!', failed: false });
   assert.ok(command('claude', 'x', 'plan').args.includes('--disallowedTools'));
-  assert.ok(command('codex', 'x', 'work').args.includes('--full-auto'));
+  const codex = command('codex', 'x', 'work', {}, 'high');
+  assert.ok(codex.args.includes('model_reasoning_effort="high"'));
+  assert.ok(codex.args.includes('--full-auto'));
   assert.ok(command('codex', 'x', 'plan').args.includes('read-only'));
+  assert.ok(!command('agy', 'x', 'work', {}, 'pro').args.includes('--model'), 'no slug configured → no flag');
+  assert.deepStrictEqual(command('agy', 'x', 'work', { agyModels: { pro: 'g-pro' } }, 'pro').args.slice(0, 4), ['-p', 'x', '--model', 'g-pro']);
 });

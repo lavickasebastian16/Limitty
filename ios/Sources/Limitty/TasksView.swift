@@ -140,6 +140,16 @@ struct TaskDetailView: View {
                             HStack {
                                 Image(systemName: stepSymbol(step.status)).foregroundStyle(workerColor(step.worker))
                                 Text(workerName(step.worker)).fontWeight(.semibold)
+                                if let label = step.modelLabel, step.model != "default" {
+                                    Text(label).foregroundStyle(.secondary)
+                                }
+                                if plan.by == step.worker {
+                                    Text("CEO")
+                                        .font(.caption2.weight(.bold))
+                                        .padding(.horizontal, 4)
+                                        .overlay(RoundedRectangle(cornerRadius: 3).stroke(Provider.claude.color))
+                                        .foregroundStyle(Provider.claude.color)
+                                }
                                 Spacer()
                                 Text(step.status).font(.caption).foregroundStyle(.secondary)
                             }
@@ -210,7 +220,7 @@ struct NewTaskView: View {
                         }
                     }
                 } footer: {
-                    Text("The CEO picks the best worker, preferring whoever has the most usage limit left.")
+                    Text("The CEO picks the worker and model for each step: a stronger model for hard work, a lighter one for simple work, and whoever has the most usage limit left. It can also do steps itself.")
                 }
                 if let error {
                     Section { Text(error).foregroundStyle(.red) }

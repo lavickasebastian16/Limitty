@@ -25,6 +25,9 @@ async function main() {
     case 'setup': return setup(args);
     case 'run': return run();
     case 'status': return status();
+    case 'version': case '--version': case '-v':
+      console.log(`Limitty ${require('../../limitty.json').version}`);
+      return;
     case 'task': return task(args);
     case 'tasks': return tasks();
     case 'pair': return pair(config.ensure());

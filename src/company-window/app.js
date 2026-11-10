@@ -3,6 +3,7 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const NAMES = { claude: 'Claude Code', codex: 'Codex', agy: 'Antigravity', you: 'you', rules: 'rules' };
+const MODEL_LABELS = { opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku', high: 'high effort', medium: 'medium effort', low: 'low effort', pro: 'Gemini Pro', flash: 'Gemini Flash' };
 const STATUS = { queued: 'Waiting', planning: 'CEO is planning', running: 'Working', done: 'Done', failed: 'Failed', cancelled: 'Cancelled' };
 let state = null;
 let openOutputs = new Set();
@@ -25,7 +26,9 @@ function renderTeam() {
     const t = state.team[id] || {};
     const left = t.remaining == null ? '' : ` · ${Math.round(t.remaining)}% left`;
     const what = !t.available ? 'not installed' : t.busy ? 'busy' : 'free';
-    return `<span class="chip ${t.available ? '' : 'off'}"><span class="dot ${id}"></span>${NAMES[id]} · ${what}${left}</span>`;
+    const models = (t.models || []).filter((m) => m.id !== 'default')
+      .map((m) => `${m.label}: ${m.remaining == null ? '?' : `${Math.round(m.remaining)}% left`}`).join('\n');
+    return `<span class="chip ${t.available ? '' : 'off'}" title="${esc(models)}"><span class="dot ${id}"></span>${NAMES[id]} · ${what}${left}</span>`;
   }).join('');
 }
 
@@ -50,7 +53,7 @@ function renderTasks() {
       const st = s.status === 'running' ? `<span class="spin"></span>working · ${duration(s.startedAt)}`
         : s.finishedAt ? `${s.status} · ${duration(s.startedAt, s.finishedAt)}` : s.status;
       return `<li class="step">
-        <div class="step-head"><span class="badge"><span class="dot ${s.worker}"></span>${NAMES[s.worker]}</span>
+        <div class="step-head"><span class="badge"><span class="dot ${s.worker}"></span>${NAMES[s.worker]}${MODEL_LABELS[s.model] ? ` · ${MODEL_LABELS[s.model]}` : ''}${t.plan.by === s.worker ? ' <b class="ceo">CEO</b>' : ''}</span>
           <span>${esc(s.title)}</span><span class="step-status ${s.status}">${st}</span></div>
         ${s.output ? `<details data-key="${key}" ${openOutputs.has(key) ? 'open' : ''}><summary>Output</summary><pre>${esc(s.output)}</pre></details>` : ''}
       </li>`;
@@ -74,7 +77,9 @@ function renderTasks() {
 }
 
 function render(s) {
-  state = s;
+  state = { ...state, ...s };
+  s = state;
+  if (s.version) $('version').textContent = `Limitty ${s.version}`;
   $('remote').hidden = s.owner !== false;
   renderTeam();
   renderProjects();

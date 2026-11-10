@@ -18,16 +18,61 @@ const WORKERS = {
 const OUTPUT_LIMIT = 6000;
 
 /**
+ * Models the CEO can choose per step. `tier` guides the choice; `limit` names the
+ * per-model usage limit to check (see company.js → defaultLimits).
+ *  - Claude Code: model aliases (`--model opus|sonnet|haiku`).
+ *  - Codex: reasoning effort for its default model (`-c model_reasoning_effort=…`).
+ *  - agy: Gemini Pro / Flash, only if you list your `agy models` slugs in
+ *    ~/.limitty/agent.json → "workers": { "agyModels": { "pro": "…", "flash": "…" } }
+ *    (agy's --model flag differs between versions).
+ */
+const MODELS = {
+  claude: [
+    { id: 'opus', label: 'Opus', tier: 'strongest', limit: 'opus' },
+    { id: 'sonnet', label: 'Sonnet', tier: 'balanced', limit: 'sonnet' },
+    { id: 'haiku', label: 'Haiku', tier: 'fast' },
+  ],
+  codex: [
+    { id: 'high', label: 'high effort', tier: 'strongest' },
+    { id: 'medium', label: 'medium effort', tier: 'balanced' },
+    { id: 'low', label: 'low effort', tier: 'fast' },
+  ],
+  agy: [
+    { id: 'pro', label: 'Gemini Pro', tier: 'strongest', limit: 'pro' },
+    { id: 'flash', label: 'Gemini Flash', tier: 'fast', limit: 'flash' },
+  ],
+};
+
+/** The models a worker offers with your settings. */
+function modelsFor(worker, opts = {}) {
+  if (worker === 'agy') {
+    const slugs = opts.agyModels || {};
+    const list = MODELS.agy.filter((m) => slugs[m.id]);
+    return list.length ? list : [{ id: 'default', label: 'default model', tier: 'balanced' }];
+  }
+  return MODELS[worker] || [];
+}
+
+function modelArgs(worker, model, opts = {}) {
+  if (!model || model === 'default') return [];
+  if (worker === 'claude') return ['--model', model];
+  if (worker === 'codex') return ['-c', `model_reasoning_effort="${model}"`];
+  if (worker === 'agy' && opts.agyModels?.[model]) return ['--model', opts.agyModels[model]];
+  return [];
+}
+
+/**
  * Command line for a worker. `mode`: 'work' (may edit files and run commands in the
  * project) or 'plan' (read-only, used by the CEO).
  */
-function command(worker, prompt, mode = 'work', opts = {}) {
+function command(worker, prompt, mode = 'work', opts = {}, model = null) {
+  const m = modelArgs(worker, model, opts);
   switch (worker) {
     case 'claude':
       return {
         bin: 'claude',
         // Prompt on stdin: no quoting problems on Windows, no length limits.
-        args: ['-p', '--output-format', 'json',
+        args: ['-p', '--output-format', 'json', ...m,
           ...(mode === 'plan'
             ? ['--allowedTools', 'Read Glob Grep', '--disallowedTools', 'Edit Write Bash NotebookEdit']
             : ['--permission-mode', 'acceptEdits', ...(opts.allowCommands === false ? [] : ['--allowedTools', 'Bash'])])],
@@ -43,14 +88,14 @@ function command(worker, prompt, mode = 'work', opts = {}) {
       return {
         bin: 'codex',
         // "-" = read the prompt from stdin. --full-auto: edit + run commands inside the project sandbox.
-        args: ['exec', '--skip-git-repo-check', ...(mode === 'plan' ? ['--sandbox', 'read-only'] : ['--full-auto']), '-'],
+        args: ['exec', '--skip-git-repo-check', ...m, ...(mode === 'plan' ? ['--sandbox', 'read-only'] : ['--full-auto']), '-'],
         stdin: prompt,
         parse: (out) => ({ text: out, failed: false }),
       };
     case 'agy':
       return {
         bin: process.env.ANTIGRAVITY_CLI_PATH || 'agy',
-        args: ['-p', prompt, ...(opts.agyArgs || [])],
+        args: ['-p', prompt, ...m, ...(opts.agyArgs || [])],
         stdin: null,
         env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
         parse: (out) => ({ text: out, failed: false }),
@@ -87,8 +132,8 @@ function onPath(bin) {
  * Runs a worker. Returns { promise, cancel }. The promise resolves to
  * { ok, text, code } and never rejects.
  */
-function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts = {}, onOutput } = {}) {
-  const cmd = command(worker, prompt, mode, opts);
+function run(worker, prompt, { cwd, mode = 'work', timeoutMs = 45 * 60_000, opts = {}, model = null, onOutput } = {}) {
+  const cmd = command(worker, prompt, mode, opts, model);
   let child;
   let out = '';
   let err = '';
@@ -146,4 +191,4 @@ function tail(s) {
   return s.length > OUTPUT_LIMIT ? `…${s.slice(-OUTPUT_LIMIT)}` : s;
 }
 
-module.exports = { WORKERS, command, run, isInstalled };
+module.exports = { WORKERS, MODELS, modelsFor, modelArgs, command, run, isInstalled };

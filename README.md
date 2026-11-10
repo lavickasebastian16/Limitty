@@ -1,6 +1,18 @@
 # Limitty
 
-See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window.
+**Version 1.00.000**
+
+See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
+
+## ⬇️ Download
+
+Every build is on the **[latest release](https://github.com/lavickasebastian16/Limitty/releases/tag/latest)**:
+
+| You have | File | Install |
+|---|---|---|
+| iPhone | `Limitty-1.00.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.00.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.00.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
 ## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
@@ -25,7 +37,12 @@ Status is stored in a **private Gist** on your GitHub account. Limitty only asks
 
 Run your agents like a small company:
 - **You** give a task, from the iPhone (**Tasks → New task**), the desktop app (the briefcase button → **Company** window), or a terminal (`node src/agents/cli.js task "…" --in <folder>`).
-- **The CEO** (Claude Code by default) reads the task. It splits the task into up to 4 steps if useful, and hands each step to the best worker. It prefers whoever has the most usage limit left, using Limitty's own limit readings.
+- **The CEO** (Claude Code by default) reads the task. It splits the task into up to 4 steps if useful, and gives each step to the best worker **and model**. The CEO is on the team too, and takes steps itself when it's the best fit (marked **CEO**).
+- **Model choice** matches the work to the model, using live usage limits for each model:
+  - **Claude Code:** Opus for hard design or tricky bugs, Sonnet for normal coding, Haiku for small edits and docs.
+  - **Codex:** high, medium or low reasoning effort.
+  - **Antigravity:** Gemini Pro or Flash.
+  - It uses Claude's separate weekly Opus and Sonnet limits and the Gemini Pro and Flash quotas, and avoids any model under 15% left unless nothing else fits.
 - **The workers** (Claude Code, Codex, Antigravity) carry out the steps in order, in your project folder. Each step sees the results of the earlier ones.
 - You follow progress, the CEO's plan, and each worker's output on the phone or PC. You get a push alert when a task is done or fails, and you can cancel or rerun any task.
 
@@ -37,7 +54,10 @@ Details:
   - Use git so you can review or undo their changes.
 - **Projects:** add folders with **Add folder…** in the Company window. Folders your agents worked in recently show up too.
 - **Which process runs it:** the desktop app or the background agent (`npm run agent`), whichever starts first; the other just shows the tasks. Tasks from the phone go through the same private GitHub Gist as agent status, so they need GitHub sign-in.
-- **CEO choice:** set `"ceo": "codex"`, `"agy"` or `"rules"` in `~/.limitty/agent.json`. `"rules"` uses no AI: it picks the free worker with the most limit left. To stop Claude workers from running shell commands, set `"workers": { "allowCommands": false }`.
+- **CEO choice:** set `"ceo": "codex"`, `"agy"` or `"rules"` in `~/.limitty/agent.json`. `"rules"` uses no AI: it picks the free worker with the most limit left, and a balanced model with room left. Planning itself uses the CEO's balanced model (for example Sonnet) to save its limit.
+- **Settings** in `~/.limitty/agent.json` → `"workers"`:
+  - `"allowCommands": false` stops Claude workers from running shell commands.
+  - `"agyModels": { "pro": "…", "flash": "…" }` turns on Gemini Pro or Flash choice for agy. Use the slugs `agy models` shows. agy's `--model` flag differs between versions, so it's off until you set this.
 - **Limits:** a task that's running when Limitty or the PC stops is marked as interrupted; use **Run again**. Each step stops after 45 minutes.
 
 ## 🖥️ Desktop widget (Claude + Codex + agy)
@@ -94,13 +114,48 @@ Limitty reads the logins your CLIs already store. It needs no API keys and never
 - **"Login expired"**: run that CLI once so it refreshes its token, then hit ↻.
 - **Antigravity "not running"**: open the Antigravity app or run `agy` in a terminal and leave it running.
 
+## 🐧 Linux / Omarchy
+
+Limitty runs on Omarchy (Arch + Hyprland + Waybar):
+
+```bash
+git clone https://github.com/lavickasebastian16/Limitty.git && cd Limitty
+./linux/omarchy-install.sh            # downloads the latest build (needs `gh auth login`, since the repo is private)
+./linux/omarchy-install.sh --source   # or builds it on your machine
+```
+
+The script:
+1. Installs the package (`/usr/bin/limitty`).
+2. Adds **Hyprland window rules** (`~/.config/hypr/limitty.conf`, or `limitty.lua` if you use `hyprland.lua`). The widget floats top-right, is pinned on every workspace, has no border or shadow, and doesn't steal focus. It also starts Limitty with Hyprland.
+3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget; right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
+
+Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
+
+## 🔢 Versions
+
+Limitty uses **X.XX.XXX**:
+- **X** is the main version.
+- **XX** is a big upgrade.
+- **XXX** is a minor update.
+
+For example: `1.00.000` → `1.00.001` (fix) → `1.01.000` (new feature) → `2.00.000`.
+
+Set it everywhere (desktop, Linux packages, iPhone app and widget) with:
+
+```bash
+node scripts/set-version.js 1.01.000
+```
+
+npm and Electron need plain semver, so `1.01.000` is stored there as `1.1.0`. The iPhone build number is `X*100000 + XX*1000 + XXX`. You see `1.01.000` everywhere: the desktop menu, the Company window, the iPhone app, `limitty-agent --version` and the release title.
+
 ## Development
 
 ```bash
 npm test                 # desktop + Scriptable tests
 (cd ios && swift test)   # iPhone app core tests (works on Linux)
 npm run check            # print live limits in the terminal
-node scripts/make-icon.js  # regenerate assets/tray.png
+node scripts/make-icon.js  # regenerate the icons
+npm run dist:linux         # build the AppImage, pacman and tar.gz into dist/
 ```
 
 Project layout:

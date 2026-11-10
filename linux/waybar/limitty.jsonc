@@ -1,0 +1,11 @@
+// Limitty module for Waybar. Add "custom/limitty" to "modules-right" (or left/center)
+// in ~/.config/waybar/config.jsonc and paste this block next to the other modules,
+// then run: omarchy restart waybar
+"custom/limitty": {
+  "exec": "limitty --waybar",
+  "return-type": "json",
+  "interval": 60,
+  "tooltip": true,
+  "on-click": "limitty --toggle",
+  "on-click-right": "limitty --company"
+}
