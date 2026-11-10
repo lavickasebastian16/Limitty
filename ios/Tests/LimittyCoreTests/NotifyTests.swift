@@ -30,6 +30,11 @@ final class NotifyTests: XCTestCase {
         XCTAssertEqual(AlertDetector.alerts(from: try company("running"), to: try company("done")).map(\.kind), [.done])
         XCTAssertEqual(AlertDetector.alerts(from: try company("running"), to: try company("failed")).map(\.kind), [.attention])
         XCTAssertEqual(AlertDetector.alerts(from: try company("done"), to: try company("done")), [])
+        // A phone task that finished between two checks still alerts once.
+        let empty = CompanyState()
+        let quick = try JSONDecoder().decode(CompanyState.self, from: Data(#"{"projects":[],"workers":{},"tasks":[{"id":"t2","title":"Quick fix","project":"site","worker":"auto","source":"phone","status":"done","createdAt":1,"updatedAt":2}]}"#.utf8))
+        XCTAssertEqual(AlertDetector.alerts(from: empty, to: quick).map(\.kind), [.done])
+        XCTAssertEqual(AlertDetector.alerts(from: quick, to: quick), [])
     }
 
     func testSettingsDefaultsAndSwitches() throws {

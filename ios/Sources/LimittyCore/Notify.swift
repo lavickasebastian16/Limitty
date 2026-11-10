@@ -91,7 +91,9 @@ public enum AlertDetector {
         guard let old else { return [] }
         let before = Dictionary(old.tasks.map { ($0.id, $0.status) }, uniquingKeysWith: { a, _ in a })
         return new.tasks.compactMap { t in
-            guard let prev = before[t.id], prev != t.status else { return nil }
+            // A task this phone sent can finish before the phone ever saw it running.
+            let prev = before[t.id] ?? (t.source == "phone" ? "new" : nil)
+            guard let prev, prev != t.status else { return nil }
             switch t.status {
             case "done": return AgentAlert(kind: .done, title: "Task done · \(t.project)", body: t.title, id: "task-\(t.id)", isTask: true)
             case "failed": return AgentAlert(kind: .attention, title: "Task failed · \(t.project)", body: t.error ?? t.title, id: "task-\(t.id)", isTask: true)
