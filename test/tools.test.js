@@ -113,3 +113,31 @@ echo "Login successful."
   skipped.cancel();
   assert.strictEqual(await skipped.promise, 'cancelled');
 });
+
+test('Antigravity sign-in: runs its session hidden, and finishes once agy answers', { skip: process.platform === 'win32' }, async () => {
+  // A pretend agy: background runs fail until the interactive session has signed in.
+  fs.writeFileSync(path.join(BIN, 'agy'), `#!/bin/sh
+if [ "$1" = "-p" ]; then [ -f "$HOME/agy-token" ] && { echo OK; exit 0; }; echo "authentication required" >&2; exit 1; fi
+[ -t 0 ] || { echo "not a terminal"; exit 2; }
+echo "Welcome to Antigravity. Opening your browser to sign in with Google…"
+echo "https://accounts.google.com/o/oauth2/auth?client_id=agy"
+sleep 1
+touch "$HOME/agy-token"
+echo "Signed in."
+sleep 300
+`, { mode: 0o755 });
+  assert.strictEqual(tools.TOOLS.agy.signedIn(), null, 'unknown before');
+  const urls = [];
+  const s = tools.browserLogin('agy', { onUrl: (u, o) => urls.push([u, o.open]), probeMs: 300 });
+  assert.strictEqual(await s.promise, 'signed-in');
+  assert.deepStrictEqual(urls, [['https://accounts.google.com/o/oauth2/auth?client_id=agy', false]], 'link offered; agy opens its own tab');
+  assert.strictEqual(tools.TOOLS.agy.signedIn(), true, 'remembered');
+
+  // Skipped before signing in.
+  fs.rmSync(path.join(HOME, 'agy-token'));
+  fs.writeFileSync(path.join(BIN, 'agy'), '#!/bin/sh\n[ "$1" = "-p" ] && exit 1\necho waiting; sleep 300\n', { mode: 0o755 });
+  const c = tools.browserLogin('agy', { probeMs: 300 });
+  setTimeout(() => c.cancel(), 500);
+  assert.strictEqual(await c.promise, 'cancelled');
+  assert.strictEqual(tools.TOOLS.agy.signedIn(), null);
+});

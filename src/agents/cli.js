@@ -235,7 +235,7 @@ async function agentsCmd([sub, ...rest]) {
       const r = await tools.install(id, { onLine: (l) => console.log(`  ${l}`) }).promise;
       console.log(r.ok ? `✓ Installed ${r.path}` : `✗ ${r.error}`);
       if (!r.ok) process.exitCode = 1;
-      else if (tools.TOOLS[id].signedIn() !== true) console.log(`  Next: sign in with \`${[r.path, ...tools.TOOLS[id].login.slice(1)].join(' ')}\``);
+      else if (tools.TOOLS[id].signedIn() !== true) console.log(`  Next: sign in with \`${[r.path, ...tools.TOOLS[id].login].join(' ')}\``);
     }
     return;
   }
@@ -245,7 +245,7 @@ async function agentsCmd([sub, ...rest]) {
     const bin = tools.find(ids[0]);
     if (!bin) { console.error(`${t.name} isn't installed. Run: agents install ${ids[0]}`); process.exitCode = 1; return; }
     console.log(t.loginHint);
-    require('child_process').spawnSync(bin, t.login.slice(1), { stdio: 'inherit' });
+    require('child_process').spawnSync(bin, t.login, { stdio: 'inherit' });
     return;
   }
   for (const a of tools.status()) {

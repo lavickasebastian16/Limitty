@@ -18,6 +18,7 @@ const HOME = os.homedir();
 const LOCAL_BIN = path.join(HOME, '.local', 'bin');
 const DIR = process.env.LIMITTY_HOME || path.join(HOME, '.limitty');
 const CHOICE_FILE = path.join(DIR, 'tools.json');
+const AGY_OK = path.join(DIR, 'agy-signed-in');
 
 const CODEX_SCRIPT = `set -e
 case "$(uname -s)" in Linux) os=unknown-linux-musl ;; Darwin) os=apple-darwin ;; *) echo "Unsupported system: $(uname -s)"; exit 1 ;; esac
@@ -66,10 +67,12 @@ const TOOLS = {
     provider: 'antigravity',
     about: 'Google’s coding agent (agy CLI). Uses your Google account’s Gemini quota.',
     script: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
-    // agy has no login command: it asks you to sign in the first time it's used.
-    login: ['-p', 'Reply with just: OK'],
-    loginHint: 'Sign in with your Google account.',
-    signedIn: () => null, // agy keeps its login where Limitty can't check it
+    // agy has no login command: its interactive session asks you to sign in with Google.
+    // browserLogin runs that session hidden and watches for the sign-in to work.
+    login: [],
+    loginHint: 'Sign in with your Google account. If the page shows a code, paste it below.',
+    // agy keeps its login in the system keyring; Limitty remembers when a sign-in worked.
+    signedIn: () => (fs.existsSync(AGY_OK) ? true : null),
   },
 };
 
@@ -238,7 +241,7 @@ const URL_RE = /https:\/\/[^\s"'<>]+/g;
  * shows one on the page) back to it. Resolves to 'signed-in' | 'failed' | 'cancelled'.
  * Returns { promise, sendCode, cancel, output() }.
  */
-function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 * 60_000, spawnImpl = spawn } = {}) {
+function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 * 60_000, probeMs = 6000, spawnImpl = spawn } = {}) {
   const t = TOOLS[id];
   const bin = find(id) || t.bin;
   const lines = [];
@@ -250,8 +253,15 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
   const env = ensurePath({ ...process.env, AGY_CLI_DISABLE_AUTO_UPDATE: 'true' });
   // Limitty opens the page itself, so stop the agents opening a second tab.
   if (id !== 'agy') env.BROWSER = process.platform === 'win32' ? 'cmd /c rem' : 'true';
+  if (id === 'agy') env.TERM = env.TERM || 'xterm-256color';
+  // agy only signs in from its interactive session, which needs a terminal: give it a
+  // hidden one with `script`, and let it open the browser itself.
+  const isAgy = id === 'agy';
+  const [cmd, args] = !isAgy ? [bin, t.login]
+    : process.platform === 'darwin' ? ['script', ['-q', '/dev/null', bin]] : ['script', ['-qfc', `'${bin.replace(/'/g, `'\\''`)}'`, '/dev/null']];
+  let probe = null;
   try {
-    child = spawnImpl(bin, t.login, { cwd: HOME, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    child = spawnImpl(cmd, args, { cwd: HOME, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   } catch (e) {
     finish('failed');
     return { promise, sendCode: () => {}, cancel: () => {}, output: () => e.message };
@@ -268,7 +278,8 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
         // Only sign-in pages, not e.g. a docs link; and each one once.
         if (seen.has(url) || !/oauth|auth|login|accounts\.google|signin/i.test(url)) continue;
         seen.add(url);
-        onUrl(url);
+        // agy opens its own tab on a desktop; open ours only when it asks you to (remote-style sign-in).
+        onUrl(url, { open: !isAgy || /visit|open (this|the)|paste|code/i.test(lines.slice(-3).join(' ')) });
       }
     }
   };
@@ -276,10 +287,33 @@ function browserLogin(id, { onUrl = () => {}, onLine = () => {}, timeoutMs = 10 
   child.stderr?.on('data', feed);
   child.stdin?.on('error', () => {});
   const timer = setTimeout(() => { cancelled = true; child.kill(); }, timeoutMs);
-  child.on('error', (e) => { clearTimeout(timer); lines.push(e.message); finish('failed'); });
+  let agyOk = false;
+  if (isAgy) {
+    // The session stays open after sign-in, so check every few seconds whether agy answers now.
+    fs.rmSync(AGY_OK, { force: true });
+    const check = () => {
+      const p = spawnImpl(bin, ['-p', 'Reply with just: OK'], { cwd: HOME, env, stdio: 'ignore' });
+      const kill = setTimeout(() => p.kill(), 60_000);
+      p.on('error', () => {});
+      p.on('close', (code) => {
+        clearTimeout(kill);
+        if (code !== 0 || cancelled || agyOk) return;
+        agyOk = true;
+        fs.mkdirSync(DIR, { recursive: true });
+        fs.writeFileSync(AGY_OK, '');
+        child.kill();
+      });
+    };
+    probe = setInterval(check, probeMs);
+    check();
+  }
+  child.on('error', (e) => { clearTimeout(timer); clearInterval(probe); lines.push(e.message); finish('failed'); });
   child.on('close', (code) => {
     clearTimeout(timer);
+    clearInterval(probe);
+    if (agyOk) return finish('signed-in');
     if (cancelled) return finish('cancelled');
+    if (isAgy) return finish('failed'); // the session ended before a sign-in worked
     cliCache.delete(id);
     const signed = t.signedIn();
     finish(signed === true || (code === 0 && signed !== false) ? 'signed-in' : 'failed');

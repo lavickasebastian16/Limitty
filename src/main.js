@@ -260,11 +260,11 @@ async function installOne(id) {
 /** Signs in through a new browser tab and waits until you're done there (or press Skip). */
 async function signInOne(id) {
   const t = tools.TOOLS[id];
-  agentJobs[id] = { job: 'signin', note: `Opening the sign-in page in your browser… ${t.loginHint}`, url: null, codeBox: id === 'claude' };
+  agentJobs[id] = { job: 'signin', note: `${id === 'agy' ? 'Antigravity is opening its sign-in page in your browser…' : 'Opening the sign-in page in your browser…'} ${t.loginHint}`, url: null, codeBox: id !== 'codex' };
   pushAgentsState();
   const s = tools.browserLogin(id, {
-    onUrl: (url) => {
-      if (!agentJobs[id]?.url) shell.openExternal(url); // a new tab; later links are only offered
+    onUrl: (url, { open = true } = {}) => {
+      if (open && !agentJobs[id]?.url) shell.openExternal(url); // a new tab; later links are only offered
       agentJobs[id] = { ...agentJobs[id], url, note: `A sign-in page opened in your browser. ${t.loginHint}` };
       pushAgentsState();
     },
