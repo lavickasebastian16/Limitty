@@ -46,7 +46,7 @@ final class AppModel {
     private let githubFeed = GitHubStatusFeed()
 
     /// Notification settings (also saved to the Gist so the PC can send Bark alerts).
-    private(set) var phone: PhoneSettings
+    private(set) var phone = PhoneSettings()
     private(set) var phoneSyncError: String?
     private var phoneSyncTask: Task<Void, Never>?
 
