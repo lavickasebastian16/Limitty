@@ -8,11 +8,12 @@ struct ContentView: View {
     @State private var loginFor: Provider?
     @State private var showPair = false
     @State private var showAlerts = false
+    @State private var showGitHub = false
 
     var body: some View {
         NavigationStack {
             List {
-                AgentsSection(showPair: $showPair, showAlerts: $showAlerts)
+                AgentsSection(showPair: $showPair, showAlerts: $showAlerts, showGitHub: $showGitHub)
 
                 if !model.store.isShared {
                     Section {
@@ -65,7 +66,7 @@ struct ContentView: View {
                                 _ = await (limits, agents)
                             }
                         } label: { Image(systemName: "arrow.clockwise") }
-                            .disabled(model.signedIn.isEmpty && model.pairing == nil)
+                            .disabled(model.signedIn.isEmpty && !model.agentsConnected)
                     }
                 }
             }
@@ -85,6 +86,7 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showPair) { PairView() }
             .sheet(isPresented: $showAlerts) { AlertsSetupView() }
+            .sheet(isPresented: $showGitHub) { GitHubLoginView() }
             .task { await model.refresh() }
             .task(id: scenePhase) {
                 // Keep agent status fresh while the app is open.

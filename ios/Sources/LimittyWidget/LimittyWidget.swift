@@ -205,7 +205,7 @@ struct AgentsTimeline: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (AgentsEntry) -> Void) {
         let store = SharedStore.shared
         let cached = store.cachedAgentStatus()
-        completion(AgentsEntry(date: .now, paired: store.agentPairing() != nil || context.isPreview,
+        completion(AgentsEntry(date: .now, paired: store.githubAccount() != nil || store.agentPairing() != nil || context.isPreview,
                                status: cached ?? (context.isPreview ? AgentSample.status() : nil)))
     }
 
@@ -213,12 +213,19 @@ struct AgentsTimeline: TimelineProvider {
         Task {
             let store = SharedStore.shared
             var status = store.cachedAgentStatus()
-            if let pairing = store.agentPairing(), let fresh = try? await AgentFeed().fetch(pairing) {
+            var fresh: AgentStatus?
+            if let gh = store.githubAccount() {
+                fresh = (try? await GitHubStatusFeed().fetch(gh)) ?? nil
+            } else if let pairing = store.agentPairing() {
+                fresh = (try? await AgentFeed().fetch(pairing)) ?? nil
+            }
+            if let fresh {
                 status = fresh
                 store.saveAgentStatus(fresh)
             }
             // iOS limits how often widgets refresh; open Limitty or use ntfy alerts for instant updates.
-            completion(Timeline(entries: [AgentsEntry(date: .now, paired: store.agentPairing() != nil, status: status)],
+            let paired = store.githubAccount() != nil || store.agentPairing() != nil
+            completion(Timeline(entries: [AgentsEntry(date: .now, paired: paired, status: status)],
                                 policy: .after(.now.addingTimeInterval(5 * 60))))
         }
     }
@@ -232,7 +239,7 @@ struct AgentsWidgetView: View {
         if !entry.paired {
             VStack(spacing: 4) {
                 Image(systemName: "desktopcomputer")
-                Text("Pair with your PC in Limitty").font(.caption).multilineTextAlignment(.center)
+                Text("Sign in with GitHub in Limitty").font(.caption).multilineTextAlignment(.center)
             }
         } else if let status = entry.status {
             switch family {

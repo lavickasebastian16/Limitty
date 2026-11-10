@@ -4,7 +4,8 @@
 // Limitty PC companion: tells your iPhone whether Claude Code, Codex and
 // Antigravity (agy) are working, need your attention, or are idle.
 //
-//   npm run agent:setup     pair with your phone and install the hooks
+//   npm run agent:setup     sign in with GitHub and install the hooks
+//                           (--qr: pair with a QR code instead, no GitHub)
 //   npm run agent           run the relay (setup can make it start at login)
 //
 //   node src/agents/cli.js status | pair | test | uninstall
@@ -25,10 +26,11 @@ async function main() {
     case 'run': return run();
     case 'status': return status();
     case 'pair': return pair(config.ensure());
+    case 'logout': require('./connect').disconnect(); console.log('Signed out of GitHub. Run setup to connect again.'); return;
     case 'test': return test();
     case 'uninstall': return uninstall();
     default:
-      console.log('Usage: limitty-agent <setup|run|status|pair|test|uninstall>');
+      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|status|pair|test|logout|uninstall>');
       process.exitCode = cmd ? 1 : 0;
   }
 }
@@ -91,27 +93,53 @@ function readStdin(timeoutMs) {
 // ───────────── setup ─────────────
 
 async function setup(argv) {
-  const cfg = config.ensure();
   console.log('\nLimitty agent setup\n');
+  const report = ([name, ok, msg]) => console.log(`  ${ok ? '✓' : '✗'} ${name}: ${msg}`);
 
-  const report = (name, fn) => {
-    try { console.log(`  ✓ ${name}: ${fn()}`); } catch (e) { console.log(`  ✗ ${name}: ${e.message}`); }
-  };
-  report('Claude Code hooks', () => hooks.installClaude());
-  report('Antigravity (agy) hooks', () => hooks.installAgy());
-  report('Codex', () => {
-    const r = hooks.installCodex();
-    if (r.status === 'conflict') {
-      return `you already have a \`notify\` command in ${r.file}. Codex reads Limitty's session logs anyway; `
-        + `for instant "finished" alerts, replace it with:\n      ${r.line}`;
-    }
-    return `${r.file} (turn-complete notify)`;
-  });
+  if (argv.includes('--qr')) {
+    // Older pairing: QR code + encrypted ntfy relay, no GitHub account.
+    const cfg = config.ensure();
+    require('./connect').installHooks().forEach(report);
+    if (!argv.includes('--no-autostart')) startAtLogin(report);
+    console.log('\nRestart any running Claude Code / Codex / agy sessions so they pick up the hooks.\n');
+    await pair(cfg);
+    return;
+  }
 
-  if (!argv.includes('--no-autostart')) report('Start at login', () => autostart(true));
+  const { connect } = require('./connect');
+  try {
+    const { login, results } = await connect({
+      forceLogin: argv.includes('--relogin'),
+      onCode: ({ userCode, verificationUri }) => {
+        console.log('Sign in with GitHub so your PC and iPhone can find each other:');
+        console.log(`  1. Open ${verificationUri}`);
+        console.log(`  2. Enter the code  ${userCode}\n`);
+        openBrowser(verificationUri);
+      },
+    });
+    console.log(`  ✓ Signed in to GitHub as @${login}`);
+    results.forEach(report);
+  } catch (e) {
+    console.log(`  ✗ ${e.message}`);
+    process.exitCode = 1;
+    return;
+  }
+  if (!argv.includes('--no-autostart')) startAtLogin(report);
+  console.log('\nDone. Restart any running Claude Code / Codex / agy sessions so they pick up the hooks.');
+  console.log('On your iPhone: Limitty → Agents on your PC → Sign in with GitHub (same account).\n');
+}
 
-  console.log('\nRestart any running Claude Code / Codex / agy sessions so they pick up the hooks.\n');
-  await pair(cfg);
+function startAtLogin(report) {
+  try { report(['Start at login', true, autostart(true)]); } catch (e) { report(['Start at login', false, e.message]); }
+}
+
+function openBrowser(url) {
+  try {
+    const { spawn } = require('child_process');
+    const [cmd, args] = process.platform === 'win32' ? ['cmd', ['/c', 'start', '', url]]
+      : process.platform === 'darwin' ? ['open', [url]] : ['xdg-open', [url]];
+    spawn(cmd, args, { stdio: 'ignore', detached: true }).on('error', () => {}).unref();
+  } catch { /* the URL is printed anyway */ }
 }
 
 async function pair(cfg) {

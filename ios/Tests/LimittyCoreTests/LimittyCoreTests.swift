@@ -318,3 +318,63 @@ final class AgentTests: XCTestCase {
         XCTAssertNil(store.cachedAgentStatus())
     }
 }
+
+final class GitHubTests: XCTestCase {
+    func testDeviceFlow() async throws {
+        let http = FakeHTTP([
+            "https://github.com/login/device/code": (200, #"{"device_code":"dev","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","interval":5,"expires_in":900}"#),
+            "https://github.com/login/oauth/access_token": (200, #"{"error":"authorization_pending"}"#),
+        ])
+        let code = try await GitHubAuth.start(http: http, clientID: "Iv1.test")
+        XCTAssertEqual(code.userCode, "ABCD-1234")
+        XCTAssertTrue(http.calls[0].body.contains("scope=gist"))
+
+        let waits = Box()
+        let token = try await GitHubAuth.waitForToken(code, http: http, clientID: "Iv1.test") { seconds in
+            waits.values.append(seconds)
+            if waits.values.count == 2 {
+                http.routes["https://github.com/login/oauth/access_token"] = (200, #"{"access_token":"gho_x"}"#)
+            }
+        }
+        XCTAssertEqual(token, "gho_x")
+        XCTAssertEqual(waits.values, [5, 5])
+    }
+
+    func testNotConfigured() async {
+        do { _ = try await GitHubAuth.start(http: FakeHTTP([:]), clientID: ""); XCTFail() } catch let e as LimitError {
+            XCTAssertEqual(e.message, "GitHub sign-in isn't set up in this build")
+        } catch { XCTFail("\(error)") }
+    }
+
+    func testFindsGistAndReadsStatus() async throws {
+        let status = #"{\"v\":1,\"host\":\"my-pc\",\"sentAt\":1794310036,\"alertsTopic\":\"limitty-x-alerts\",\"sessions\":[{\"agent\":\"claude\",\"name\":\"Claude Code\",\"id\":\"a\",\"project\":\"site\",\"state\":\"attention\",\"detail\":\"Needs permission\",\"since\":1794310030}]}"#
+        let http = FakeHTTP([
+            "https://api.github.com/gists?per_page=100&page=1": (200, #"[{"id":"other","files":{"notes.md":{}}},{"id":"g1","files":{"limitty-status.json":{}}}]"#),
+            "https://api.github.com/gists/g1": (200, #"{"id":"g1","files":{"limitty-status.json":{"content":"\#(status)"}}}"#),
+        ])
+        let feed = GitHubStatusFeed(http: http)
+        let gist = try await feed.findGist(token: "t")
+        XCTAssertEqual(gist, "g1")
+        XCTAssertEqual(http.calls[0].headers["Authorization"], "Bearer t")
+        let s = try await feed.fetch(GitHubAccount(token: "t", login: "octo", gistId: "g1"))
+        XCTAssertEqual(s?.host, "my-pc")
+        XCTAssertEqual(s?.alertsTopic, "limitty-x-alerts")
+        XCTAssertEqual(s?.sessions.first?.state, .attention)
+    }
+
+    func testEmptyPlaceholderGistMeansWaitingForPC() async throws {
+        let http = FakeHTTP(["https://api.github.com/gists/g1": (200, #"{"files":{"limitty-status.json":{"content":"{\"v\":1,\"sessions\":[]}"}}}"#)])
+        let s = try await GitHubStatusFeed(http: http).fetch(GitHubAccount(token: "t", login: "o", gistId: "g1"))
+        XCTAssertNil(s)
+    }
+
+    func testAccountStorage() {
+        let store = tempStore()
+        store.setGitHubAccount(GitHubAccount(token: "t", login: "octo", gistId: "g"))
+        XCTAssertEqual(store.githubAccount()?.login, "octo")
+        store.setGitHubAccount(nil)
+        XCTAssertNil(store.githubAccount())
+    }
+}
+
+final class Box: @unchecked Sendable { var values: [Double] = [] }

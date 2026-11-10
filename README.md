@@ -11,14 +11,15 @@ Rather not set up xtool? [`scriptable/`](scriptable/README.md) has a lighter wid
 
 ## 🤖 Agent status on your iPhone (Claude Code, Codex, agy)
 
-See whether each agent on your PC is **working**, **needs you** (a permission prompt or question), or **idle**, and get a push alert when one needs you or finishes. A small companion on your PC watches the agents and relays their status to the iPhone app, end-to-end encrypted, through [ntfy](https://ntfy.sh).
+See whether each agent on your PC is **working**, **needs you** (a permission prompt or question), or **idle**, and get a push alert when one needs you or finishes. You link the PC and phone by **signing in with the same GitHub account** on both.
 
-```bash
-npm install
-npm run agent:setup   # installs the hooks, starts the relay at login, shows a QR code
-```
+1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…**, then enter the code shown on GitHub's page. This installs the agent hooks and makes Limitty start at login. Headless or WSL? Run `npm install && npm run agent:setup` instead.
+2. **iPhone:** Limitty → **Agents on your PC** → **Sign in with GitHub**, and enter the code shown there.
+3. *Optional:* tap **Get alerts on this iPhone** to set up push alerts with the free ntfy app.
 
-Scan the QR code with your iPhone's Camera app to pair. Then, in Limitty, tap **Get alerts on this iPhone** to set up the free ntfy app for push alerts. More details are below under [How agent status works](#how-agent-status-works).
+Status is stored in a **private Gist** on your GitHub account. Limitty only asks for Gist access. More details are below under [How agent status works](#how-agent-status-works).
+
+> **One-time setup for this repo:** GitHub sign-in needs a free "OAuth app" so Limitty has a sign-in ID. See [Register the GitHub sign-in](#register-the-github-sign-in-one-time).
 
 ## 🖥️ Desktop widget (Claude + Codex + agy)
 
@@ -95,6 +96,15 @@ ios/                     iPhone app + widget (SwiftUI, built with xtool)
 scriptable/              iPhone widget as a Scriptable script
 ```
 
+## Register the GitHub sign-in (one time)
+
+1. Open <https://github.com/settings/applications/new>.
+2. Fill in:
+   - **Application name:** `Limitty`
+   - **Homepage URL** and **Authorization callback URL:** `https://github.com/lavickasebastian16/Limitty` (the callback URL isn't used)
+3. Click **Register application**. On the next page, tick **Enable Device Flow**, then click **Update application**.
+4. Copy the **Client ID** (it starts with `Ov23` or `Iv1.`). It isn't secret, and you don't need a client secret. Run `node scripts/set-github-client-id.js <Client ID>` and commit the two files it changes. GitHub then rebuilds the iPhone app with sign-in enabled.
+
 ## How agent status works
 
 | Agent | How Limitty knows | Needs you | Finished |
@@ -104,17 +114,21 @@ scriptable/              iPhone widget as a Scriptable script
 | **Antigravity (agy)** | hooks in `~/.gemini/config/hooks.json` | ⚠️ guessed, the same way as Codex | ✅ Stop hook |
 
 - **Commands:**
+  - `npm run agent:setup` signs in with GitHub and installs the hooks; add `-- --qr` to pair with a QR code and the ntfy relay instead, with no GitHub account.
   - `npm run agent` runs the relay (setup already makes it start at login on Windows, macOS and Linux with systemd).
   - `npm run agent:status` shows what it sees.
   - `node src/agents/cli.js test` sends a test alert.
   - `node src/agents/cli.js pair` shows the QR code again.
+  - `node src/agents/cli.js logout` signs the PC out of GitHub.
   - `node src/agents/cli.js uninstall` removes the hooks and the start-at-login entry.
 - **Restart open agent sessions** after setup so they load the hooks.
 - **WSL:** run the agent **inside WSL** if your agents run there.
 - **Privacy:**
-  - Status is encrypted (AES-256-GCM) with a key that's only on your PC and phone. ntfy only sees ciphertext.
+  - With GitHub sign-in, status (agent name, project folder, state) lives in a private ("secret") Gist on your account. Only you can list it; delete the Gist to remove it.
+  - With QR pairing, status is encrypted (AES-256-GCM) with a key that's only on your PC and phone. ntfy only sees ciphertext.
   - Push alerts are plain text so the ntfy app can show them: agent name, project folder, and the prompt message. Set `"showProjectNames": false` in `~/.limitty/agent.json` to send only the agent name.
 - **Limits:**
-  - ntfy.sh's free tier allows 250 messages a day per IP address. Limitty sends status only when something changes (at most every 30 s), plus a heartbeat every 30 minutes, and slows down if it gets close to the limit.
+  - GitHub mode updates the Gist at most every 15 s, plus every 10 minutes as a heartbeat, well within GitHub's API limits.
+  - ntfy.sh's free tier allows 250 messages a day per IP address (it's used for push alerts, and for status in QR mode). Limitty sends status only when something changes (at most every 30 s), plus a heartbeat every 30 minutes, and slows down if it gets close to the limit.
   - For more, set `server` and `token` in `~/.limitty/agent.json` to your own ntfy server or a paid account, then pair again.
 - **Desktop widget:** while it's open, the desktop widget runs the relay too, so only one copy runs.

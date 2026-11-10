@@ -71,6 +71,31 @@ public struct AgentStatus: Codable, Hashable, Sendable {
     public var host: String
     public var sentAt: Double
     public var sessions: [AgentSession]
+    /// Where push alerts go (sent by the PC in GitHub mode).
+    public var alertsTopic: String?
+    public var ntfyServer: String?
+
+    public init(v: Int = 1, host: String, sentAt: Double, sessions: [AgentSession], alertsTopic: String? = nil, ntfyServer: String? = nil) {
+        self.v = v
+        self.host = host
+        self.sentAt = sentAt
+        self.sessions = sessions
+        self.alertsTopic = alertsTopic
+        self.ntfyServer = ntfyServer
+    }
+
+    enum CodingKeys: String, CodingKey { case v, host, sentAt, sessions, alertsTopic, ntfyServer }
+
+    // Lenient: the Gist starts as {"v":1,"sessions":[]} before the PC first writes to it.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        v = try c.decodeIfPresent(Int.self, forKey: .v) ?? 1
+        host = try c.decodeIfPresent(String.self, forKey: .host) ?? ""
+        sentAt = try c.decodeIfPresent(Double.self, forKey: .sentAt) ?? 0
+        sessions = try c.decodeIfPresent([AgentSession].self, forKey: .sessions) ?? []
+        alertsTopic = try c.decodeIfPresent(String.self, forKey: .alertsTopic)
+        ntfyServer = try c.decodeIfPresent(String.self, forKey: .ntfyServer)
+    }
 
     public var sentDate: Date { Date(timeIntervalSince1970: sentAt) }
 

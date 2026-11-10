@@ -28,19 +28,40 @@ final class AppModel {
     private(set) var pairing: AgentPairing?
     private(set) var agentStatus: AgentStatus?
     private(set) var agentError: String?
+    private(set) var github: GitHubAccount?
     private let feed = AgentFeed()
+    private let githubFeed = GitHubStatusFeed()
+
+    var agentsConnected: Bool { github != nil || pairing != nil }
+    /// ntfy topic/server for push alerts (from the PC's status in GitHub mode, or the QR pairing).
+    var alertsTopic: String? { agentStatus?.alertsTopic ?? pairing?.alertsTopic }
+    var alertsServer: String { agentStatus?.ntfyServer ?? pairing?.server ?? "https://ntfy.sh" }
 
     init() {
         signedIn = Set(service.signedIn)
         for s in service.cached() { snapshots[s.provider] = s }
         pairing = store.agentPairing()
+        github = store.githubAccount()
         agentStatus = store.cachedAgentStatus()
     }
 
     func refreshAgents() async {
-        guard let pairing else { return }
         do {
-            if let status = try await feed.fetch(pairing), status != agentStatus {
+            let status: AgentStatus?
+            if var gh = github {
+                // The PC creates the Gist when it connects; keep looking until it does.
+                if gh.gistId == nil, let id = try await githubFeed.findGist(token: gh.token) {
+                    gh.gistId = id
+                    github = gh
+                    store.setGitHubAccount(gh)
+                }
+                status = try await githubFeed.fetch(gh)
+            } else if let pairing {
+                status = try await feed.fetch(pairing)
+            } else {
+                return
+            }
+            if let status, status != agentStatus {
                 agentStatus = status
                 store.saveAgentStatus(status)
                 WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
@@ -49,8 +70,24 @@ final class AppModel {
         } catch let e as LimitError {
             agentError = e.message
         } catch {
-            agentError = "Can't reach \(pairing.server)"
+            agentError = "Can't reach the server. Check your connection."
         }
+    }
+
+    func connectGitHub(_ account: GitHubAccount) {
+        store.setGitHubAccount(account)
+        github = account
+        agentStatus = nil
+        agentError = nil
+        Task { await refreshAgents() }
+    }
+
+    func disconnectGitHub() {
+        store.setGitHubAccount(nil)
+        github = nil
+        agentStatus = nil
+        store.setAgentPairing(pairing) // keeps a QR pairing if there is one; clears cached status otherwise
+        WidgetCenter.shared.reloadTimelines(ofKind: "AgentsWidget")
     }
 
     func pair(_ p: AgentPairing) {

@@ -76,13 +76,13 @@ Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minut
 
 ## Agent status from your PC
 
-The **Agents on your PC** section, and the **Limitty Agents** widget, show whether Claude Code, Codex and Antigravity on your PC are working, need you, or are idle:
+The **Agents on your PC** section, and the **Limitty Agents** widget, show whether Claude Code, Codex and Antigravity on your PC are working, need you, or are idle. Link them by signing in with the **same GitHub account** on both:
 
-1. On your PC, in the repo folder, run `npm install` then `npm run agent:setup`.
-2. Scan the QR code it shows with the iPhone **Camera** app; it opens Limitty and pairs. Or paste the `limitty://pair…` link under **Pair with your PC**.
-3. For push alerts, tap **Get alerts on this iPhone** and subscribe to the topic in the free **ntfy** app.
+1. **PC:** in the Limitty desktop app, open the menu (⋯) → **Connect agents to iPhone…** (or run `npm run agent:setup`), and enter the code on GitHub's page.
+2. **iPhone:** **Sign in with GitHub**, tap **Copy code & open GitHub**, paste the code and approve it.
+3. *Optional:* **Get alerts on this iPhone** sets up push alerts with the free ntfy app.
 
-While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so rely on the ntfy alerts for "needs you". The main README has details on how each agent is detected.
+While Limitty is open, the list refreshes every 15 seconds. The widget refreshes when iOS allows, roughly every 5–15 minutes, so rely on the ntfy alerts for "needs you". GitHub sign-in needs a one-time registration; see "Register the GitHub sign-in" in the main README. No GitHub account? **Pair with a QR code instead** still works.
 
 ## Free Apple ID limits
 

@@ -3,9 +3,13 @@
 // The background part of the PC companion: reads hook events and Codex logs,
 // keeps track of each agent session, and relays status to your iPhone.
 //
-// Budget: ntfy.sh's free tier allows 250 messages a day per IP address, so
-// status goes out only when it changes (at most every 30 s), with a heartbeat
-// every 30 minutes; push alerts go out right away.
+// Where status goes:
+//  - Signed in with GitHub (the default): a private Gist on your account, which
+//    the iPhone app reads after you sign in there too. At most every 15 s, plus a
+//    heartbeat every 10 minutes.
+//  - Otherwise (QR-code pairing): encrypted to an ntfy topic. ntfy.sh's free tier
+//    allows 250 messages a day per IP, so at most every 30 s, heartbeat every 30 min.
+// Push alerts always go through ntfy, right away.
 
 const fs = require('fs');
 const os = require('os');
@@ -13,10 +17,13 @@ const { FILES, alertsTopic } = require('./config');
 const { seal } = require('./crypto');
 const { applyEvent, tick, snapshot, fingerprint, alertText } = require('./state');
 const { CodexWatcher } = require('./codex');
+const github = require('./github');
 
 const STATUS_MIN_INTERVAL_MS = 30_000;
 const STATUS_SLOW_INTERVAL_MS = 5 * 60_000; // when the daily budget runs low
 const HEARTBEAT_MS = 30 * 60_000;
+const GIST_MIN_INTERVAL_MS = 15_000;
+const GIST_HEARTBEAT_MS = 10 * 60_000;
 const DAILY_BUDGET = 250;
 const SLOW_DOWN_AT = 180;
 const ALERT_RESERVE = 10;
@@ -34,6 +41,7 @@ class Daemon {
     this.pendingStatus = false;
     this.budget = { day: 0, used: 0 };
     this.backoffUntil = 0;
+    this.gistBackoffUntil = 0;
     this.recentAlerts = new Map();
     this.codex = new CodexWatcher();
     this.timers = [];
@@ -53,7 +61,9 @@ class Daemon {
     this.readEvents();
     this.ingest(this.codex.scan(this.now()));
     this.requestStatus(true);
-    this.log(`Limitty agent running. Relaying to ${this.cfg.server}/${this.cfg.topic}`);
+    this.log(this.cfg.github?.gistId
+      ? `Limitty agent running. Sharing status with your iPhone via GitHub (@${this.cfg.github.login || 'you'}).`
+      : `Limitty agent running. Relaying to ${this.cfg.server}/${this.cfg.topic}`);
     return true;
   }
 
@@ -130,8 +140,25 @@ class Daemon {
     const snap = snapshot(this.sessions, { host: os.hostname(), now });
     const print = fingerprint(snap);
     const changed = print !== this.lastPrint;
-    const heartbeatDue = now - this.lastStatusAt > HEARTBEAT_MS;
+    const gh = this.cfg.github;
+    const heartbeatDue = now - this.lastStatusAt > (gh ? GIST_HEARTBEAT_MS : HEARTBEAT_MS);
     if (!changed && !heartbeatDue && !force) return;
+
+    if (gh?.token && gh.gistId) {
+      if (!force && now - this.lastStatusAt < GIST_MIN_INTERVAL_MS) return;
+      if (now < this.gistBackoffUntil) return;
+      this.lastPrint = print;
+      this.lastStatusAt = now;
+      // The phone learns where to subscribe for push alerts from the status itself.
+      const status = { ...snap, alertsTopic: alertsTopic(this.cfg), ntfyServer: this.cfg.server };
+      github.writeStatus(gh.token, gh.gistId, status, this.fetch).catch((e) => {
+        this.log(`Couldn't update the GitHub Gist: ${e.message}`);
+        this.lastPrint = ''; // retry
+        this.gistBackoffUntil = now + 60_000;
+      });
+      return;
+    }
+
     const minGap = this.budgetLeft() < DAILY_BUDGET - SLOW_DOWN_AT ? STATUS_SLOW_INTERVAL_MS : STATUS_MIN_INTERVAL_MS;
     if (!force && now - this.lastStatusAt < minGap) return; // try again on the next tick
     if (this.budgetLeft() <= ALERT_RESERVE) return;

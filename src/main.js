@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, dialog, shell, clipboard } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { fetchAll } = require('./providers');
@@ -129,8 +129,82 @@ function buildTrayMenu() {
     },
     { label: 'Reset position', click: () => { config.x = null; config.y = null; saveConfig(); placeDefault(); } },
     { type: 'separator' },
+    agentsMenuItem(),
+    { type: 'separator' },
     { label: 'Quit Limitty', click: () => app.quit() },
   ]);
+}
+
+// ───── Agent status on your iPhone ─────
+
+function agentConfig() {
+  try { return require('./agents/config').load(); } catch { return null; }
+}
+
+/** Runs the agent relay while the widget is open (quietly skips if another copy runs). */
+function startAgentRelay() {
+  agentDaemon?.stop();
+  agentDaemon = null;
+  const cfg = agentConfig();
+  if (!cfg) return;
+  try {
+    const { Daemon } = require('./agents/daemon');
+    agentDaemon = new Daemon(cfg, { log: (m) => console.log(`[agent] ${m}`) });
+    if (!agentDaemon.start()) agentDaemon = null;
+  } catch (e) {
+    console.error('[agent]', e.message);
+  }
+}
+
+function agentsMenuItem() {
+  const gh = agentConfig()?.github;
+  if (gh?.gistId) {
+    return {
+      label: `Agents → iPhone: @${gh.login}`,
+      submenu: [
+        { label: 'Reinstall agent hooks', click: () => { require('./agents/connect').installHooks(); dialog.showMessageBox({ message: 'Agent hooks reinstalled. Restart open agent sessions to pick them up.' }); } },
+        { label: 'Disconnect', click: () => { require('./agents/connect').disconnect(); agentDaemon?.stop(); agentDaemon = null; updateTray(); } },
+      ],
+    };
+  }
+  return { label: 'Connect agents to iPhone…', click: connectAgents };
+}
+
+let connecting = false;
+async function connectAgents() {
+  if (connecting) return;
+  connecting = true;
+  try {
+    const { connect } = require('./agents/connect');
+    const { login, results } = await connect({
+      onCode: ({ userCode, verificationUri }) => {
+        clipboard.writeText(userCode);
+        shell.openExternal(verificationUri);
+        // Not awaited: sign-in continues in the background while this is shown.
+        dialog.showMessageBox({
+          type: 'info',
+          message: `Sign in with GitHub\n\nEnter this code on the GitHub page that just opened:\n\n${userCode}`,
+          detail: 'It is already copied to your clipboard. Limitty connects as soon as you approve it.',
+        });
+      },
+    });
+    app.setLoginItemSettings({ openAtLogin: true }); // keep the relay running after restarts
+    startAgentRelay();
+    const failed = results.filter(([, ok]) => !ok).map(([name, , msg]) => `${name}: ${msg}`);
+    dialog.showMessageBox({
+      type: failed.length ? 'warning' : 'info',
+      message: `Connected as @${login}`,
+      detail: `${failed.length ? `Some hooks need attention:\n${failed.join('\n')}\n\n` : ''}`
+        + 'Restart any open Claude Code, Codex or agy sessions so they pick up the hooks.\n\n'
+        + 'On your iPhone: Limitty → Agents on your PC → Sign in with GitHub (same account).\n'
+        + 'Limitty now starts at login so the status stays up to date.',
+    });
+  } catch (e) {
+    dialog.showMessageBox({ type: 'error', message: 'Couldn\'t connect', detail: e.message });
+  } finally {
+    connecting = false;
+    updateTray();
+  }
 }
 
 function placeDefault() {
@@ -204,18 +278,7 @@ if (!app.requestSingleInstanceLock()) {
     win.webContents.once('did-finish-load', refresh);
     schedule();
 
-    // If the agent relay is set up (npm run agent:setup), run it while the widget is open.
-    // It quietly does nothing when another copy is already running.
-    try {
-      const agentConfig = require('./agents/config').load();
-      if (agentConfig) {
-        const { Daemon } = require('./agents/daemon');
-        agentDaemon = new Daemon(agentConfig, { log: (m) => console.log(`[agent] ${m}`) });
-        if (!agentDaemon.start()) agentDaemon = null;
-      }
-    } catch (e) {
-      console.error('[agent]', e.message);
-    }
+    startAgentRelay();
   });
 
   app.on('before-quit', () => agentDaemon?.stop());
