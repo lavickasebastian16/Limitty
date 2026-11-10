@@ -2,10 +2,12 @@
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window.
 
-## 📱 iPhone widget (Claude + Codex)
+## 📱 iPhone app + widgets (Claude + Codex)
 
-Home- and lock-screen widgets that run in the free **Scriptable** app. You don't need a Mac.
-Setup guide: **[ios/README.md](ios/README.md)**. The script is [`ios/Limitty.js`](ios/Limitty.js).
+A native SwiftUI app with Home Screen and Lock Screen widgets. You build and install it with [xtool](https://github.com/xtool-org/xtool) from Linux or Windows (WSL); you don't need a Mac.
+Guide: **[ios/README.md](ios/README.md)**.
+
+Rather not set up xtool? [`scriptable/`](scriptable/README.md) has a lighter widget-only version for the free Scriptable app.
 
 ## 🖥️ Desktop widget (Claude + Codex + agy)
 
@@ -64,7 +66,8 @@ Limitty reads the logins your CLIs already store. It needs no API keys and never
 ## Development
 
 ```bash
-npm test                 # unit tests (desktop providers + iPhone script with faked Scriptable APIs)
+npm test                 # desktop + Scriptable tests
+(cd ios && swift test)   # iPhone app core tests (works on Linux)
 npm run check            # print live limits in the terminal
 node scripts/make-icon.js  # regenerate assets/tray.png
 ```
@@ -77,5 +80,6 @@ src/preload.js           Safe bridge between the window and the main process
 src/renderer/            Widget UI (HTML/CSS/JS)
 src/providers/           One module per service: claude.js, codex.js, antigravity.js
 src/cli.js               Terminal output
-ios/Limitty.js           iPhone widget (Scriptable script)
+ios/                     iPhone app + widget (SwiftUI, built with xtool)
+scriptable/              iPhone widget as a Scriptable script
 ```

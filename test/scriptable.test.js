@@ -1,13 +1,13 @@
 'use strict';
 
-// Runs ios/Limitty.js under Node with minimal fakes of Scriptable's APIs.
+// Runs scriptable/Limitty.js under Node with minimal fakes of Scriptable's APIs.
 
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const SRC = fs.readFileSync(path.join(__dirname, '..', 'ios', 'Limitty.js'), 'utf8');
+const SRC = fs.readFileSync(path.join(__dirname, '..', 'scriptable', 'Limitty.js'), 'utf8');
 
 function jwt(claims) {
   const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -83,7 +83,7 @@ const CLAUDE_ROUTES = {
   },
 };
 
-test('ios: claude via sessionKey cookie', async () => {
+test('scriptable: claude via sessionKey cookie', async () => {
   const env = makeEnv(CLAUDE_ROUTES, { 'limitty.claude.sessionKey': 'sk-ant-sid01-abc' });
   const m = await env.load();
   const [claude] = await m.loadAll('claude');
@@ -93,7 +93,7 @@ test('ios: claude via sessionKey cookie', async () => {
   assert.strictEqual(env.calls[0].headers.Cookie, 'sessionKey=sk-ant-sid01-abc');
 });
 
-test('ios: codex via session cookie mints a token, sends account id', async () => {
+test('scriptable: codex via session cookie mints a token, sends account id', async () => {
   const token = jwt({ exp: Date.now() / 1000 + 3600, 'https://api.openai.com/auth': { chatgpt_account_id: 'acct-9' } });
   const env = makeEnv({
     'https://chatgpt.com/api/auth/session': { body: { accessToken: token } },
@@ -110,14 +110,14 @@ test('ios: codex via session cookie mints a token, sends account id', async () =
   assert.strictEqual(env.calls[1].headers['ChatGPT-Account-Id'], 'acct-9');
 });
 
-test('ios: expired pasted codex token gives a clear error', async () => {
+test('scriptable: expired pasted codex token gives a clear error', async () => {
   const env = makeEnv({}, { 'limitty.codex.auth': jwt({ exp: 1000 }) });
   const m = await env.load();
   const [codex] = await m.loadAll('codex');
   assert.deepStrictEqual([codex.ok, codex.error], [false, 'Token expired']);
 });
 
-test('ios: offline falls back to cached numbers marked stale', async () => {
+test('scriptable: offline falls back to cached numbers marked stale', async () => {
   const env = makeEnv(CLAUDE_ROUTES, { 'limitty.claude.sessionKey': 'k' });
   const m = await env.load();
   await m.loadAll('claude');
@@ -127,7 +127,7 @@ test('ios: offline falls back to cached numbers marked stale', async () => {
   assert.strictEqual(again.stale, true);
 });
 
-test('ios: widget renders every family; not-signed-in shows hint', async () => {
+test('scriptable: widget renders every family; not-signed-in shows hint', async () => {
   const env = makeEnv({});
   const m = await env.load();
   const results = await m.loadAll();
@@ -138,14 +138,14 @@ test('ios: widget renders every family; not-signed-in shows hint', async () => {
   }
 });
 
-test('ios: main() sets a widget when run as widget', async () => {
+test('scriptable: main() sets a widget when run as widget', async () => {
   const env = makeEnv({});
   const m = await env.load();
   await m.main();
   assert.strictEqual(env.globals.widget.kind, 'widget');
 });
 
-test('ios: classifies codex logins', async () => {
+test('scriptable: classifies codex logins', async () => {
   const m = await makeEnv({}).load();
   assert.strictEqual(m.classifyCodexAuth('eyJa.eyJb.c').kind, 'token');
   assert.strictEqual(m.classifyCodexAuth('eyJa.b.c.d.e').kind, 'cookie');

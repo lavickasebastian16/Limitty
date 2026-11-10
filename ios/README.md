@@ -1,59 +1,84 @@
-# Limitty for iPhone
+# Limitty for iPhone (native app + widgets)
 
-A home-screen and lock-screen widget showing your **Claude** and **Codex** usage limits, with a bar and reset countdown for each limit window.
+A native SwiftUI app with Home Screen and Lock Screen widgets showing your **Claude** and **Codex** usage limits: a bar per limit window, the percentage used, and when it resets.
 
-Limitty runs inside **[Scriptable](https://apps.apple.com/app/scriptable/id1405459188)**, a free App Store app that runs JavaScript and can make real iPhone widgets. You don't need a Mac or Xcode, and nothing gets sideloaded.
+You build it with **[xtool](https://github.com/xtool-org/xtool)**, which builds and installs iPhone apps from **Linux or Windows (WSL)**. You don't need a Mac or a paid developer account.
 
-> **Antigravity (agy) isn't in the iPhone version.** Its quota only exists on the computer where Antigravity runs, so a phone can't ask for it directly. Use the desktop widget (`npm start` in the repo root) for agy.
+> **Antigravity (agy) isn't included.** Its quota only exists on the computer where Antigravity runs, so the phone can't ask for it. Use the desktop widget (`npm start` in the repo root) for agy.
 
-## 1. Install the script
+## What you need
 
-1. Install **Scriptable** from the App Store.
-2. On your iPhone, open [`ios/Limitty.js`](Limitty.js) on GitHub, tap **Raw**, then select all and copy.
-3. In Scriptable, tap **+**, paste, tap the title at the top, and name it **Limitty**. Tap **Done**.
+- A **Linux** PC, or **Windows with WSL**
+- A USB cable for your iPhone
+- An **Apple ID**. A free one works. xtool's docs suggest a spare Apple ID, because free-account sign-in uses private Apple APIs.
 
-## 2. Add your logins (one time)
+## 1. Install xtool (one time)
 
-Run **Limitty** in Scriptable (tap it). A menu appears with **Claude login** and **Codex login**. Paste each value below. They're saved in the iOS Keychain on your phone and are only ever sent to claude.ai and chatgpt.com.
+Follow xtool's [Linux/Windows install guide](https://github.com/xtool-org/xtool/blob/main/Documentation/xtool.docc/Installation-Linux.md). In short:
 
-The easiest way to copy these values is from a browser on a **computer** where you're signed in. Send them to yourself (Notes, email, a message), then copy them on the phone. With the value on your clipboard, the menu offers **Use clipboard**.
+1. **Windows only:** install WSL, then [USBIPD](https://learn.microsoft.com/en-us/windows/wsl/connect-usb) so WSL can see your iPhone over USB.
+2. Install the **Swift toolchain** from <https://swift.org/install/linux>.
+3. Install **usbmuxd**: `sudo apt-get install usbmuxd`
+4. In your browser, download **Xcode** (the `.xip` file, several GB) from <https://developer.apple.com/download/all/?q=Xcode>. Sign in with your Apple ID.
+5. Install xtool:
+   ```bash
+   curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool-$(uname -m).AppImage" -o xtool
+   chmod +x xtool && sudo mv xtool /usr/local/bin/
+   ```
+6. Run `xtool setup`. Choose **Password** for a free Apple ID, and give it the path to the Xcode `.xip`.
 
-### Claude: the `sessionKey` cookie (lasts about a month)
+## 2. Prepare your iPhone (one time)
 
-1. On a computer, open **claude.ai** in Chrome or Edge and sign in.
-2. Press **F12** (Mac: ⌥⌘I). Go to **Application**, then **Cookies**, then `https://claude.ai`.
-3. Copy the **Value** of `sessionKey`. It starts with `sk-ant-sid…`.
+1. Plug it in, unlock it, and tap **Trust This Computer**.
+2. Turn on **Settings → Privacy & Security → Developer Mode**. The iPhone restarts.
 
-Why not the Claude Code token? The long-lived `claude setup-token` token is blocked from reading usage. It lacks the `user:profile` permission. The normal Claude Code login token expires within hours.
+## 3. Build and install Limitty
 
-### Codex: pick one
+```bash
+git clone https://github.com/lavickasebastian16/Limitty.git
+cd Limitty/ios
+xtool dev
+```
 
-**A. ChatGPT web cookie (recommended, lasts weeks).** The phone uses it to get a fresh token by itself each time.
-1. On a computer, open **chatgpt.com** and sign in.
-2. Press **F12**. Go to **Application**, then **Cookies**, then `https://chatgpt.com`.
-3. Copy the value of `__Secure-next-auth.session-token`.
-   If you only see `…session-token.0` and `…session-token.1`, copy both in this form:
-   `__Secure-next-auth.session-token.0=VALUE0; __Secure-next-auth.session-token.1=VALUE1`
+The first time you open the app, iOS will say the developer is untrusted. Go to **Settings → General → VPN & Device Management**, tap your Apple ID, then tap **Trust**.
 
-**B. Codex access token (expires after about 10 days).** Open `~/.codex/auth.json` on your computer and copy `tokens.access_token` (starts with `eyJ…`). Paste a new one when the widget says *Token expired*.
+> If xtool says the bundle ID is taken, change `bundleID` in `xtool.yml` to something unique to you (for example `com.yourname.limitty`) and run `xtool dev` again.
 
-## 3. Add the widget
+## 4. Sign in and add the widget
 
-1. Long-press the home screen, tap **Edit**, then **Add Widget**, then **Scriptable**. Pick a size (medium fits both services best) and tap **Add Widget**.
-2. Long-press the new widget, tap **Edit Widget**, and set **Script** to **Limitty**.
-3. Optional: set **Parameter** to `claude` or `codex` to show only one service.
+1. Open **Limitty**, tap **Sign in to Claude**, and sign in on the claude.ai page that opens. Do the same for **Codex** (chatgpt.com).
+   - Use **email sign-in**. Google and Apple sign-in buttons often refuse to work inside apps.
+   - Can't sign in that way? Tap **Paste instead** and paste the cookie from a computer browser. For Claude that's `sessionKey`; for Codex it's `__Secure-next-auth.session-token`, or a Codex `access_token` from `~/.codex/auth.json`.
+2. Long-press your Home Screen, tap **Edit → Add Widget → Limitty**, and pick small, medium or large. Lock Screen widgets (circle, rectangle, inline) are there too.
 
-Lock-screen widgets (rectangular and inline) work the same way.
+Bars turn amber at 60% and red at 85%. Widgets refresh about every 15–30 minutes; iOS decides exactly when. Opening the app refreshes right away. When offline, the widget keeps the last numbers for up to a day and shows a ⏱ clock icon.
 
-## How it behaves
+## Free Apple ID limits
 
-- iOS decides when widgets refresh, usually every 15–30 minutes. Tap the widget to open Scriptable and refresh right away.
-- Bars turn amber at 60% and red at 85%.
-- If the network drops, the widget keeps showing the last numbers for up to a day, marked ⏱.
-- **Login expired** means the cookie or token ran out. Run Limitty in Scriptable and paste a new one.
+- **The app stops opening after 7 days.** Plug in and run `xtool dev` again to renew it. Your logins are kept.
+- A free account can have **3 sideloaded apps** at a time, and register **10 app IDs per week**. Limitty uses 2: the app and its widget.
+
+## How it works
+
+- Signing in opens the real claude.ai or chatgpt.com page in the app. Once you're signed in, the app saves that site's cookies.
+- The cookies go into an **App Group**, storage shared between the app and its widget. That's how the widget can fetch your limits by itself. xtool registers the App Group automatically.
+- Claude limits come from `claude.ai/api/organizations/{id}/usage`. These are the numbers shown in claude.ai's Settings → Usage.
+- Codex limits come from `chatgpt.com/backend-api/wham/usage`, the same numbers as Codex's `/status`. The phone gets a fresh access token from your ChatGPT login each time.
+- Your logins are only ever sent to claude.ai and chatgpt.com.
 
 ## Caveats
 
-- These are the same usage endpoints the claude.ai and ChatGPT websites use. They aren't public APIs, so Anthropic or OpenAI could change them.
-- claude.ai and chatgpt.com sit behind Cloudflare, which sometimes blocks non-browser requests. If Codex shows *Blocked by chatgpt.com*, use option B (access token).
-- Your cookie is a full login to that account. Keep it private, and sign out of the website to cancel it.
+- These are the websites' internal endpoints, not public APIs, so Anthropic or OpenAI could change them.
+- claude.ai and chatgpt.com use Cloudflare, which sometimes blocks app requests. If you see "refused the request", sign in again. For Codex you can also paste an access token instead.
+- The saved cookie is a full login to that account. **Sign out** in Limitty, or sign out on the website, to cancel it.
+
+## Project layout
+
+```
+xtool.yml                     app + widget extension config for xtool
+Package.swift                 Swift package (targets below)
+Sources/LimittyCore/          networking, parsing, shared storage, shared views
+Sources/Limitty/              the app: limits list, in-app sign-in
+Sources/LimittyWidget/        Home and Lock Screen widgets
+Tests/LimittyCoreTests/       tests (run anywhere with `swift test`, including Linux)
+```

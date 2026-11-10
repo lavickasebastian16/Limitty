@@ -1,0 +1,10 @@
+version: 1
+# Change this to something unique to you if xtool reports the ID is taken.
+bundleID: com.limitty.app
+product: Limitty
+iconPath: Resources/AppIcon.png
+entitlementsPath: Limitty.entitlements
+extensions:
+  - product: LimittyWidget
+    infoPath: LimittyWidget-Info.plist
+    entitlementsPath: LimittyWidget.entitlements

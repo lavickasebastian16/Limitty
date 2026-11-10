@@ -1,5 +1,5 @@
 // Limitty — Claude + Codex usage limits as an iPhone home/lock-screen widget.
-// Runs in the free "Scriptable" app (App Store). Setup: see ios/README.md.
+// Runs in the free "Scriptable" app (App Store). Setup: see scriptable/README.md.
 //
 // Run it inside Scriptable to sign in / preview. Add a Scriptable widget to
 // your home screen and pick "Limitty" as the script.
@@ -395,7 +395,7 @@ async function setupMenu() {
       await w.presentMedium();
     } else if (i === 1) {
       await promptSecret('Claude login',
-        'Paste your claude.ai "sessionKey" cookie (starts with sk-ant-sid…). See ios/README.md for how to copy it. It is stored in the iOS Keychain.',
+        'Paste your claude.ai "sessionKey" cookie (starts with sk-ant-sid…). See scriptable/README.md for how to copy it. It is stored in the iOS Keychain.',
         KEY_CLAUDE);
     } else if (i === 2) {
       await promptSecret('Codex login',
