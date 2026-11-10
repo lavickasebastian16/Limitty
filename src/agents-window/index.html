@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Limitty Agents</title>
+  <link rel="stylesheet" href="../company-window/style.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Your agents</h1>
+      <p class="sub">Tick the ones you want. Limitty installs any that are missing and helps you sign in.</p>
+    </div>
+  </header>
+
+  <section id="list" class="list"><div class="empty">Looking for your agents…</div></section>
+
+  <div class="bar">
+    <button id="install" disabled>Install selected</button>
+    <span id="summary" class="note"></span>
+    <span class="spacer"></span>
+    <button id="done" class="ghost">Done</button>
+  </div>
+
+  <details id="logBox" hidden>
+    <summary>Installer output</summary>
+    <pre id="log"></pre>
+  </details>
+
+  <p class="note">Only ticked agents show in the widget and get work from the Company. Installers come from each company’s official site and put the agent in <code>~/.local/bin</code>, with no admin password needed. Each agent uses your own plan: Claude Pro or Max, ChatGPT, or your Google account.</p>
+  <footer id="version" class="note"></footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@
 //   npm run agent           run the relay (setup can make it start at login)
 //
 //   node src/agents/cli.js status | pair | test | uninstall
+//   node src/agents/cli.js agents [use|install|login] [claude codex agy]
 
 const fs = require('fs');
 const os = require('os');
@@ -20,6 +21,7 @@ const hooks = require('./hooks');
 const [, , cmd, ...args] = process.argv;
 
 async function main() {
+  require('../tools').ensurePath();
   switch (cmd) {
     case 'hook': return hook(args);
     case 'setup': return setup(args);
@@ -28,6 +30,7 @@ async function main() {
     case 'version': case '--version': case '-v':
       console.log(`Limitty ${require('../../limitty.json').version}`);
       return;
+    case 'agents': return agentsCmd(args);
     case 'task': return task(args);
     case 'tasks': return tasks();
     case 'pair': return pair(config.ensure());
@@ -35,7 +38,7 @@ async function main() {
     case 'test': return test();
     case 'uninstall': return uninstall();
     default:
-      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|status|task "…" [--in dir] [--worker w]|tasks|pair|test|logout|uninstall>');
+      console.log('Usage: limitty-agent <setup [--qr] [--relogin] [--no-autostart]|run|agents [use|install|login] [claude codex agy]|status|task "…" [--in dir] [--worker w]|tasks|pair|test|logout|uninstall>');
       process.exitCode = cmd ? 1 : 0;
   }
 }
@@ -300,3 +303,42 @@ if (require.main === module) {
 }
 
 module.exports = { normalize };
+
+/** Choose, install and sign in to your agents from a terminal. */
+async function agentsCmd([sub, ...rest]) {
+  const tools = require('../tools');
+  const ids = rest.map((x) => (x === 'antigravity' ? 'agy' : x));
+  const bad = ids.filter((id) => !tools.TOOLS[id]);
+  if (bad.length) { console.error(`Unknown agent: ${bad.join(', ')}. Use claude, codex or agy.`); process.exitCode = 1; return; }
+  if (sub === 'use') {
+    console.log(`Using: ${tools.choose(ids).map((id) => tools.TOOLS[id].name).join(', ') || 'none'}`);
+    return;
+  }
+  if (sub === 'install') {
+    const want = ids.length ? ids : tools.chosen();
+    if (ids.length) tools.choose([...new Set([...tools.chosen(), ...ids])]);
+    for (const id of want) {
+      if (tools.find(id)) { console.log(`✓ ${tools.TOOLS[id].name} is already installed (${tools.find(id)})`); continue; }
+      console.log(`Installing ${tools.TOOLS[id].name}…`);
+      const r = await tools.install(id, { onLine: (l) => console.log(`  ${l}`) }).promise;
+      console.log(r.ok ? `✓ Installed ${r.path}` : `✗ ${r.error}`);
+      if (!r.ok) process.exitCode = 1;
+      else if (tools.TOOLS[id].signedIn() !== true) console.log(`  Next: sign in with \`${[r.path, ...tools.TOOLS[id].login.slice(1)].join(' ')}\``);
+    }
+    return;
+  }
+  if (sub === 'login') {
+    if (ids.length !== 1) { console.error('Usage: agents login <claude|codex|agy>'); process.exitCode = 1; return; }
+    const t = tools.TOOLS[ids[0]];
+    const bin = tools.find(ids[0]);
+    if (!bin) { console.error(`${t.name} isn't installed. Run: agents install ${ids[0]}`); process.exitCode = 1; return; }
+    console.log(t.loginHint);
+    require('child_process').spawnSync(bin, t.login.slice(1), { stdio: 'inherit' });
+    return;
+  }
+  for (const a of tools.status()) {
+    const st = !a.installed ? 'not installed' : `${a.version || 'installed'}${a.signedIn === true ? ', signed in' : a.signedIn === false ? ', NOT signed in' : ''}`;
+    console.log(`${a.chosen ? '[x]' : '[ ]'} ${a.name.padEnd(12)} ${st}${a.path ? `  (${a.path})` : ''}`);
+  }
+  console.log('\nChange with: agents use claude codex agy   ·   agents install   ·   agents login codex');
+}

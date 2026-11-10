@@ -4,10 +4,11 @@
 // project folder. Their hooks (if installed) also report live status to the
 // Agents section, like when you run them yourself.
 
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const crossSpawn = require('cross-spawn');
+const tools = require('../tools');
+
+// The agents' installers put them in ~/.local/bin; make sure we can start them from there.
+tools.ensurePath();
 
 const WORKERS = {
   claude: { name: 'Claude Code', bin: 'claude', strengths: 'complex reasoning, debugging, refactors across many files' },
@@ -105,28 +106,16 @@ function command(worker, prompt, mode = 'work', opts = {}, model = null) {
   }
 }
 
-/** Is the worker's CLI installed? (Cached for a minute.) */
+/** Is the worker installed, and did you choose it on the Agents screen? (Cached for 10 seconds.) */
 const installedCache = new Map();
 function isInstalled(worker) {
   const hit = installedCache.get(worker);
-  if (hit && Date.now() - hit.at < 60_000) return hit.ok;
-  const bin = worker === 'agy' ? (process.env.ANTIGRAVITY_CLI_PATH || 'agy') : WORKERS[worker].bin;
-  const ok = path.isAbsolute(bin) ? fs.existsSync(bin) : onPath(bin);
+  if (hit && Date.now() - hit.at < 10_000) return hit.ok;
+  const ok = !!tools.find(worker) && tools.isChosen(worker);
   installedCache.set(worker, { ok, at: Date.now() });
   return ok;
 }
-
-function onPath(bin) {
-  const exts = process.platform === 'win32' ? (process.env.PATHEXT || '.EXE;.CMD;.BAT').split(';') : [''];
-  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
-    for (const ext of exts) {
-      if (dir && fs.existsSync(path.join(dir, bin + ext.toLowerCase()))) return true;
-      if (dir && ext && fs.existsSync(path.join(dir, bin + ext))) return true;
-    }
-  }
-  const local = path.join(os.homedir(), '.local', 'bin', bin);
-  return fs.existsSync(local);
-}
+isInstalled.clearCache = () => installedCache.clear();
 
 /**
  * Runs a worker. Returns { promise, cancel }. The promise resolves to

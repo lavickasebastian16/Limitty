@@ -25,7 +25,7 @@ function renderTeam() {
   $('team').innerHTML = Object.keys(NAMES).filter((id) => state.workers[id]).map((id) => {
     const t = state.team[id] || {};
     const left = t.remaining == null ? '' : ` · ${Math.round(t.remaining)}% left`;
-    const what = !t.available ? 'not installed' : t.busy ? 'busy' : 'free';
+    const what = !t.available ? 'unavailable' : t.busy ? 'busy' : 'free';
     const models = (t.models || []).filter((m) => m.id !== 'default')
       .map((m) => `${m.label}: ${m.remaining == null ? '?' : `${Math.round(m.remaining)}% left`}`).join('\n');
     return `<span class="chip ${t.available ? '' : 'off'}" title="${esc(models)}"><span class="dot ${id}"></span>${NAMES[id]} · ${what}${left}</span>`;
@@ -118,3 +118,4 @@ $('new').addEventListener('submit', async (e) => {
 window.company.onUpdate(render);
 window.company.state().then(render);
 setInterval(async () => render(await window.company.state()), 5000); // keep times fresh
+document.getElementById('chooseAgents').addEventListener('click', () => window.company.chooseAgents());

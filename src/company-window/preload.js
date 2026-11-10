@@ -10,5 +10,6 @@ contextBridge.exposeInMainWorld('company', {
   remove: (id) => ipcRenderer.invoke('company:remove', id),
   addProject: () => ipcRenderer.invoke('company:addProject'),
   removeProject: (name) => ipcRenderer.invoke('company:removeProject', name),
+  chooseAgents: () => ipcRenderer.send('window:agents'),
   onUpdate: (cb) => ipcRenderer.on('company:update', (_e, s) => cb(s)),
 });

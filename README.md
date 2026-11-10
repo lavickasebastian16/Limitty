@@ -1,6 +1,6 @@
 # Limitty
 
-**Version 1.00.000**
+**Version 1.01.000**
 
 See your **Claude**, **Codex** and **Antigravity (`agy`)** usage limits at a glance, with a bar and reset countdown for each limit window. Have an AI CEO hand your tasks to those agents. Follow everything from your iPhone or your PC.
 
@@ -10,9 +10,28 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/L
 
 | You have | File | Install |
 |---|---|---|
-| iPhone | `Limitty-1.00.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
-| Omarchy / Arch Linux | `Limitty-1.00.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
-| Any Linux | `Limitty-1.00.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+| iPhone | `Limitty-1.01.000.ipa` | Sideloadly, AltStore or SideStore; see [ios/README.md](ios/README.md) |
+| Omarchy / Arch Linux | `Limitty-1.01.000-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
+| Any Linux | `Limitty-1.01.000-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
+
+## 🧩 Choose your agents (installed for you)
+
+The first time you open the desktop app, it asks which agents you want: **Claude Code**, **Codex** and/or **Antigravity**. Tick them and press **Install**. Limitty then:
+1. Installs any that are missing, with each company's official installer. They go in `~/.local/bin`, with no admin password needed.
+   - **Claude Code:** `curl -fsSL https://claude.ai/install.sh | bash`
+   - **Codex:** the official release from [github.com/openai/codex](https://github.com/openai/codex/releases)
+   - **Antigravity:** `curl -fsSL https://antigravity.google/cli/install.sh | bash`
+2. Opens a terminal window to sign in, the same way as running the tool yourself.
+3. Uses only the ticked agents: the widget shows their limits, and the Company gives them work.
+
+Change your choice any time: menu (⋯) → **Choose agents…**, the **Choose agents…** button in the Company window, or `limitty --agents`.
+
+From a terminal: `node src/agents/cli.js agents` shows what's installed. Then:
+- `agents use claude codex` sets your choice.
+- `agents install` installs the missing ones.
+- `agents login codex` signs in.
+
+Automatic install works on Linux and macOS. On Windows, install the agents from their websites.
 
 ## 📱 iPhone app + widgets (Claude + Codex + Gemini)
 
@@ -31,7 +50,6 @@ See whether each agent on your PC is **working**, **needs you** (a permission pr
 
 Status is stored in a **private Gist** on your GitHub account. Limitty only asks for Gist access. More details are below under [How agent status works](#how-agent-status-works).
 
-> **One-time setup for this repo:** GitHub sign-in needs a free "OAuth app" so Limitty has a sign-in ID. See [Register the GitHub sign-in](#register-the-github-sign-in-one-time).
 
 ## 🏢 Company: give tasks to your agents
 
@@ -129,7 +147,7 @@ The script:
 2. Adds **Hyprland window rules** (`~/.config/hypr/limitty.conf`, or `limitty.lua` if you use `hyprland.lua`). The widget floats top-right, is pinned on every workspace, has no border or shadow, and doesn't steal focus. It also starts Limitty with Hyprland.
 3. Copies a **Waybar module** to `~/.config/waybar/`. It shows your limits (`C 42% · X 91% · G 15%`), agents that need you (`! 1`), working agents (`● 2`) and running tasks (`▸ 1`), with full details in the tooltip. Left-click toggles the widget; right-click opens Company. You add it to your bar yourself, so your layout stays yours (the script prints how), then run `omarchy restart waybar`.
 
-Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
+Handy for keybinds: `limitty --toggle`, `limitty --company`, `limitty --agents`, `limitty --waybar` (prints the Waybar JSON). **Start at login** in the menu writes `~/.config/autostart/limitty.desktop`. On Hyprland 0.52 or older, use the `windowrulev2` lines at the bottom of `linux/hypr/limitty.conf`.
 
 ## 🔢 Versions
 

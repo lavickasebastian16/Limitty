@@ -4,6 +4,10 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen, dialog, sh
 const path = require('path');
 const fs = require('fs');
 const { fetchAll } = require('./providers');
+const tools = require('./tools');
+
+// The agents' installers put them in ~/.local/bin, which apps started from a launcher often lack.
+tools.ensurePath();
 
 const DEFAULTS = {
   x: null,
@@ -21,6 +25,7 @@ let config = { ...DEFAULTS };
 const VERSION = (() => { try { return require('../limitty.json').version; } catch { return app.getVersion(); } })();
 let host = null; // runs the Company + phone relay (or { owner: false } if another process does)
 let companyWin = null;
+let agentsWin = null;
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 
@@ -111,21 +116,7 @@ function buildTrayMenu() {
         click: () => { config.refreshMinutes = m; saveConfig(); schedule(); },
       })),
     },
-    {
-      label: 'Show',
-      submenu: [['claude', 'Claude'], ['codex', 'Codex'], ['antigravity', 'Antigravity (agy)']].map(([id, label]) => ({
-        label,
-        type: 'checkbox',
-        checked: config.providers.includes(id),
-        click: (item) => {
-          config.providers = item.checked
-            ? [...new Set([...config.providers, id])]
-            : config.providers.filter((p) => p !== id);
-          saveConfig();
-          refresh();
-        },
-      })),
-    },
+    { label: 'Choose agents…', click: openAgents },
     {
       label: 'Start at login',
       type: 'checkbox',
@@ -207,6 +198,104 @@ async function connectAgents() {
     connecting = false;
     updateTray();
   }
+}
+
+// ───── Agents window: choose, install and sign in ─────
+
+const PROVIDER_OF = { claude: 'claude', codex: 'codex', agy: 'antigravity' };
+const agentJobs = {}; // id → { job: 'queued'|'installing', error, loginCommand, loginOpened }
+let installing = false;
+
+function openAgents() {
+  if (agentsWin) { agentsWin.show(); agentsWin.focus(); return; }
+  agentsWin = new BrowserWindow({
+    width: 620,
+    height: 560,
+    minWidth: 460,
+    minHeight: 380,
+    title: 'Limitty Agents',
+    webPreferences: { preload: path.join(__dirname, 'agents-window', 'preload.js'), contextIsolation: true, nodeIntegration: false },
+  });
+  agentsWin.setMenuBarVisibility(false);
+  agentsWin.loadFile(path.join(__dirname, 'agents-window', 'index.html'));
+  agentsWin.on('closed', () => { agentsWin = null; });
+}
+
+function agentsState() {
+  const list = tools.status().map((a) => {
+    const j = agentJobs[a.id] || {};
+    return { ...a, job: j.job || null, error: j.error || null, loginCommand: j.loginCommand || null, loginOpened: !!j.loginOpened && a.signedIn !== true };
+  });
+  return { agents: list, busy: installing, version: VERSION };
+}
+
+function pushAgentsState() {
+  agentsWin?.webContents.send('agents:update', agentsState());
+}
+
+/** Your choice also decides which limits the widget shows and who the Company can use. */
+function applyChoice(ids) {
+  const chosen = tools.choose(ids);
+  config.providers = chosen.map((id) => PROVIDER_OF[id]);
+  saveConfig();
+  require('./company/workers').isInstalled.clearCache?.();
+  refresh();
+  return chosen;
+}
+
+/** Hooks for live status on the phone, if you've connected it. */
+function reinstallHooksIfConnected() {
+  if (!agentConfig()) return;
+  try { require('./agents/connect').installHooks(); } catch { /* shown in the menu instead */ }
+}
+
+async function installAgents(ids) {
+  ids = ids.filter((id) => tools.TOOLS[id] && !tools.find(id));
+  if (installing || !ids.length) return agentsState();
+  installing = true;
+  for (const id of ids) agentJobs[id] = { job: 'queued' };
+  pushAgentsState();
+  const log = (line) => agentsWin?.webContents.send('agents:log', line);
+  for (const id of ids) {
+    agentJobs[id] = { job: 'installing' };
+    pushAgentsState();
+    log(`── Installing ${tools.TOOLS[id].name} ──`);
+    const r = await tools.install(id, { onLine: log }).promise;
+    if (r.ok) {
+      log(`✓ ${tools.TOOLS[id].name} installed: ${r.path}`);
+      agentJobs[id] = {};
+      // Straight on to signing in, unless it already is.
+      if (tools.TOOLS[id].signedIn() !== true) loginAgent(id);
+    } else {
+      log(`✗ ${tools.TOOLS[id].name}: ${r.error}`);
+      agentJobs[id] = { error: `Install failed: ${r.error}` };
+    }
+    pushAgentsState();
+  }
+  installing = false;
+  require('./company/workers').isInstalled.clearCache?.();
+  reinstallHooksIfConnected();
+  refresh();
+  return agentsState();
+}
+
+function loginAgent(id) {
+  const r = tools.openLogin(id);
+  agentJobs[id] = { ...(agentJobs[id] || {}), loginOpened: r.ok, loginCommand: r.ok ? null : r.command };
+  setTimeout(refresh, 60_000); // pick up the new limits once you've signed in
+  return agentsState();
+}
+
+function setupAgentsIpc() {
+  ipcMain.handle('agents:state', () => agentsState());
+  ipcMain.handle('agents:choose', (_e, ids) => { applyChoice(ids); return agentsState(); });
+  ipcMain.handle('agents:install', (_e, ids) => installAgents(ids));
+  ipcMain.handle('agents:login', (_e, id) => loginAgent(id));
+  ipcMain.on('agents:done', () => {
+    if (!tools.hasChosen()) applyChoice(tools.chosen());
+    agentsWin?.close();
+  });
+  ipcMain.on('window:agents', openAgents);
 }
 
 // ───── Company window ─────
@@ -329,10 +418,12 @@ function setStartAtLogin(on) {
 // ───── Command-line switches (handy for Hyprland keybinds and Waybar) ─────
 //   limitty --company   open the Company window
 //   limitty --toggle    show/hide the widget
+//   limitty --agents    choose, install and sign in to your agents
 //   limitty --waybar    print usage limits as Waybar JSON and exit
 
 function handleArgs(argv) {
   if (argv.includes('--company')) openCompany();
+  else if (argv.includes('--agents')) openAgents();
   else if (argv.includes('--toggle')) toggleWindow();
   else if (win) win.showInactive();
 }
@@ -370,12 +461,15 @@ if (process.argv.includes('--waybar')) {
     ipcMain.on('window:menu', () => buildTrayMenu().popup({ window: win }));
     ipcMain.on('window:company', openCompany);
     setupCompanyIpc();
+    setupAgentsIpc();
 
     win.webContents.once('did-finish-load', refresh);
     schedule();
 
     startHost();
     if (process.argv.includes('--company')) openCompany();
+    // First launch: pick your agents (and install any that are missing).
+    if (process.argv.includes('--agents') || !tools.hasChosen()) openAgents();
   });
 
   app.on('before-quit', () => host?.stop?.());
