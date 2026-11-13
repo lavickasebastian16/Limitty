@@ -10,7 +10,15 @@ One list of everything you have to do, from five places:
 | **EduPage** | Homework, exams and school events | School, username and password |
 | **Gmail** | Starred mail and unread mail from the last week | Address and an app password |
 
-**Add by voice:** tap the microphone and say it, for example “Remind me to hand in the essay on Friday at 8” or “Zajtra o 15:00 zubár”. Daybrief works out the title, day and time and adds it to Apple Reminders (which then alerts you at that time), or to your calendar if you say “event”, “meeting” or “appointment” with a date. It adds by itself two seconds after you stop talking, and shows **Undo**. It understands day and time words in English, Slovak and Czech, and listens in your iPhone's language.
+In the list you can:
+
+- **Tick a task off:** tap the circle next to a reminder or an Obsidian task. An Obsidian task is ticked in its note (`- [x]`; notes that use the Tasks plugin also get `✅` and the date).
+- **Hide something you've dealt with:** swipe left → **Hide**. This works on everything, including emails and EduPage items that can't be ticked. It only hides it in Daybrief, and it stays out of the summaries too. **Connections → Show hidden items again** brings them back.
+- **Put a reminder off:** swipe right → **Tomorrow**.
+- **Show one source:** tap its name under the summary (Calendar, Reminders, Obsidian…).
+- **See the count on the app icon:** today's items plus overdue tasks. It can be turned off in Connections.
+
+**Add by voice:** tap the microphone and say it, for example “Remind me to hand in the essay on Friday at 8” or “Zajtra o 15:00 zubár”. Daybrief works out the title, day and time and adds it to Apple Reminders (which then alerts you at that time), or to your calendar if you say “event”, “meeting” or “appointment” with a date. It adds by itself two seconds after you stop talking, and shows **Undo**. Can't talk right now? Type the same sentence in the box under the microphone. It understands day and time words in English, Slovak and Czech, and listens in your iPhone's language.
 
 Each day you get two notifications:
 

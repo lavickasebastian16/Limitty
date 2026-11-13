@@ -114,6 +114,30 @@ final class AppleSource: @unchecked Sendable {
         }
     }
 
+    /// Moves a reminder to tomorrow, keeping its time of day.
+    func postpone(_ item: Item) throws {
+        let id = String(item.id.dropFirst("reminders:".count))
+        guard let reminder = store.calendarItem(withIdentifier: id) as? EKReminder else {
+            throw BriefError("That reminder is no longer there.")
+        }
+        let cal = Calendar.current
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()
+        var parts = cal.dateComponents([.year, .month, .day], from: tomorrow)
+        if let due = reminder.dueDateComponents, let hour = due.hour {
+            parts.hour = hour
+            parts.minute = due.minute ?? 0
+        }
+        reminder.dueDateComponents = parts
+        // An alert set for the old time moves with it.
+        var hadAlert = false
+        for alarm in reminder.alarms ?? [] where alarm.absoluteDate != nil {
+            reminder.removeAlarm(alarm)
+            hadAlert = true
+        }
+        if hadAlert, parts.hour != nil, let when = cal.date(from: parts) { reminder.addAlarm(EKAlarm(absoluteDate: when)) }
+        try store.save(reminder, commit: true)
+    }
+
     /// Marks a reminder as done in the Reminders app.
     func complete(_ item: Item) throws {
         let id = String(item.id.dropFirst("reminders:".count))

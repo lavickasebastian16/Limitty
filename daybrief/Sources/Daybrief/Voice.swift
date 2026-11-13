@@ -75,6 +75,16 @@ struct VoiceSheet: View {
     @State private var words = ""
     @State private var listener = SpeechListener()
     @State private var quiet: Task<Void, Never>?
+    /// True while the microphone is meant to be on (false once you start typing).
+    @State private var micOn = false
+    @State private var typed = ""
+    @FocusState private var typing: Bool
+
+    /// What will be added: the typed text if there is any, else the spoken words.
+    private var current: String {
+        let t = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.isEmpty ? words : t
+    }
 
     var body: some View {
         NavigationStack {
@@ -85,17 +95,22 @@ struct VoiceSheet: View {
                         .font(.system(size: 44))
                         .foregroundStyle(.white)
                         .frame(width: 96, height: 96)
-                        .background(Circle().fill(.red))
-                        .symbolEffect(.pulse)
-                    Text(words.isEmpty ? "Say what you need to do" : words)
+                        .background(Circle().fill(micOn ? Color.red : Color.gray))
+                        .symbolEffect(.pulse, isActive: micOn)
+                    Text(words.isEmpty ? (micOn ? "Say what you need to do" : "Type what you need to do") : words)
                         .font(.title3)
                         .multilineTextAlignment(.center)
-                        .foregroundStyle(words.isEmpty ? .secondary : .primary)
-                    if words.isEmpty {
+                        .foregroundStyle(words.isEmpty ? Color.secondary : Color.primary)
+                    TextField("Or type it here", text: $typed)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($typing)
+                        .submitLabel(.done)
+                        .onSubmit { finish() }
+                    if current.isEmpty {
                         Text("For example: “Remind me to hand in the essay on Friday at 8” or “Zajtra o 15:00 zubár”.")
                             .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                     } else {
-                        preview(SpokenParser.parse(words, now: Date()))
+                        preview(SpokenParser.parse(current, now: Date()))
                         Button("Add now") { finish() }.buttonStyle(.borderedProminent)
                     }
                 case .adding:
@@ -129,10 +144,11 @@ struct VoiceSheet: View {
                 }
             }
             .onAppear { listen() }
-            .onDisappear {
-                quiet?.cancel()
-                listener.stop()
+            .onChange(of: typing) { _, on in
+                // Typing takes over from the microphone.
+                if on { stopMic() }
             }
+            .onDisappear { stopMic() }
         }
         .presentationDetents([.medium, .large])
     }
@@ -154,8 +170,16 @@ struct VoiceSheet: View {
         return task.hasTime ? "\(kind) · \(day), \(date.formatted(date: .omitted, time: .shortened))" : "\(kind) · \(day)"
     }
 
+    private func stopMic() {
+        micOn = false
+        quiet?.cancel()
+        listener.stop()
+    }
+
     private func listen() {
         words = ""
+        typed = ""
+        typing = false
         stage = .listening
         Task {
             guard await SpeechListener.allowed() else {
@@ -168,11 +192,12 @@ struct VoiceSheet: View {
                 }, failed: {
                     Task { @MainActor in
                         // Ending without words is the only real failure; with words, add them.
-                        if stage == .listening {
+                        if micOn, stage == .listening {
                             if words.isEmpty { fail("I didn't catch that.") } else { finish() }
                         }
                     }
                 })
+                micOn = true
             } catch {
                 fail((error as? BriefError)?.message ?? "The microphone couldn't be started.")
             }
@@ -180,7 +205,7 @@ struct VoiceSheet: View {
     }
 
     private func heard(_ text: String) {
-        guard stage == .listening, text != words else { return }
+        guard micOn, stage == .listening, text != words else { return }
         words = text
         // Two seconds without new words means you're done.
         quiet?.cancel()
@@ -191,17 +216,17 @@ struct VoiceSheet: View {
     }
 
     private func fail(_ message: String) {
-        quiet?.cancel()
-        listener.stop()
+        stopMic()
         stage = .failed(message)
     }
 
     private func finish() {
-        guard stage == .listening, !words.isEmpty else { return }
-        quiet?.cancel()
-        listener.stop()
+        let text = current
+        guard stage == .listening, !text.isEmpty else { return }
+        stopMic()
+        typing = false
         stage = .adding
-        let task = SpokenParser.parse(words, now: Date())
+        let task = SpokenParser.parse(text, now: Date())
         Task {
             do {
                 stage = .added(try await model.add(task))

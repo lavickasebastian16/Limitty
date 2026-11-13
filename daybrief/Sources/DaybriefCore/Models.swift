@@ -93,6 +93,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var gmailUser = ""
     public var gmailQuery = AppSettings.defaultGmailQuery
     public var schedule = BriefSchedule()
+    /// Show how much is open today on the app icon.
+    public var badge = true
 
     /// Starred mail, plus unread mail from the last week in the Primary tab.
     public static let defaultGmailQuery = "is:starred OR (category:primary is:unread newer_than:7d)"
@@ -109,5 +111,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         gmailUser = try c.decodeIfPresent(String.self, forKey: .gmailUser) ?? ""
         gmailQuery = try c.decodeIfPresent(String.self, forKey: .gmailQuery) ?? AppSettings.defaultGmailQuery
         schedule = try c.decodeIfPresent(BriefSchedule.self, forKey: .schedule) ?? BriefSchedule()
+        badge = try c.decodeIfPresent(Bool.self, forKey: .badge) ?? true
     }
 }

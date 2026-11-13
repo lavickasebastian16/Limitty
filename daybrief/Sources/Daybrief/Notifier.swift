@@ -39,8 +39,15 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
         for p in plan {
             let parts = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: p.fireDate)
             let trigger = UNCalendarNotificationTrigger(dateMatching: parts, repeats: false)
-            try? await center.add(UNNotificationRequest(identifier: p.id, content: content(p.title, p.body), trigger: trigger))
+            let c = content(p.title, p.body)
+            if let badge = p.badge { c.badge = NSNumber(value: badge) }
+            try? await center.add(UNNotificationRequest(identifier: p.id, content: c, trigger: trigger))
         }
+    }
+
+    /// The number on the app icon (0 removes it).
+    func setBadge(_ count: Int) async {
+        try? await UNUserNotificationCenter.current().setBadgeCount(count)
     }
 
     /// Shows a summary right away (the "Send a test summary" button).

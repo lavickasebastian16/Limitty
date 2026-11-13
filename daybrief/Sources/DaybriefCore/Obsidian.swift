@@ -85,6 +85,42 @@ public enum ObsidianParser {
         return items
     }
 
+    private static let openBox = Rx("^(\\s*(?:[-*+]|\\d+[.)])\\s+\\[)[ /](\\])")
+    private static let tasksPluginMark = Rx("[📅⏳🛫➕🔁✅]")
+
+    /// The note and line an item came from ("obsidian:School/Plan.md:12").
+    public static func location(of id: String) -> (file: String, line: Int)? {
+        let prefix = "obsidian:"
+        guard id.hasPrefix(prefix), let colon = id.lastIndex(of: ":"), colon > id.index(id.startIndex, offsetBy: prefix.count - 1),
+              let line = Int(id[id.index(after: colon)...]) else { return nil }
+        let file = String(id[id.index(id.startIndex, offsetBy: prefix.count)..<colon])
+        return file.isEmpty ? nil : (file, line)
+    }
+
+    /// The note's text with that task ticked (`- [x]`), or nil when the task is no
+    /// longer there. The note may have changed since it was read, so the task is
+    /// found again by its title. Notes that use the Tasks plugin also get `✅ date`.
+    public static func complete(_ item: Item, in text: String, vault: String, today: Date, calendar: Calendar = .current) -> String? {
+        guard let place = location(of: item.id) else { return nil }
+        let current = tasks(in: text, file: place.file, vault: vault, calendar: calendar)
+        guard let match = current.first(where: { $0.id == item.id && $0.title == item.title })
+                ?? current.first(where: { $0.title == item.title }),
+              let line = location(of: match.id)?.line else { return nil }
+        var lines = text.components(separatedBy: "\n")
+        guard line >= 1, line <= lines.count else { return nil }
+        var changed = lines[line - 1]
+        let endsWithReturn = changed.hasSuffix("\r")
+        if endsWithReturn { changed.removeLast() }
+        let ticked = openBox.replace(in: changed, with: "$1x$2")
+        guard ticked != changed else { return nil }
+        changed = ticked
+        if tasksPluginMark.groups(in: changed) != nil {
+            changed += " ✅ " + NotificationPlanner.dayKey(today, calendar: calendar)
+        }
+        lines[line - 1] = changed + (endsWithReturn ? "\r" : "")
+        return lines.joined(separator: "\n")
+    }
+
     /// `obsidian://open?vault=…&file=…`
     public static func openLink(vault: String, file: String) -> String {
         var allowed = CharacterSet.alphanumerics

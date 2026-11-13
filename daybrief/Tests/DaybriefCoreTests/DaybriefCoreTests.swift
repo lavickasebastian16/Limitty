@@ -48,6 +48,27 @@ final class ObsidianTests: XCTestCase {
         XCTAssertEqual(items[2].date, at(2026, 12, 1))
     }
 
+    func testTicksATaskInTheNote() throws {
+        let note = "# Plan\n- [ ] Buy milk\r\n- [ ] Essay 📅 2026-11-14\n- [x] Old\n"
+        let items = ObsidianParser.tasks(in: note, file: "School/Plan: a.md", vault: "V", calendar: cal)
+        XCTAssertEqual(ObsidianParser.location(of: items[0].id)?.file, "School/Plan: a.md")
+        XCTAssertEqual(ObsidianParser.location(of: items[0].id)?.line, 2)
+        XCTAssertNil(ObsidianParser.location(of: "reminders:abc"))
+
+        // A plain checkbox is only ticked; the line ending is kept.
+        XCTAssertEqual(ObsidianParser.complete(items[0], in: note, vault: "V", today: at(2026, 11, 13), calendar: cal),
+                       "# Plan\n- [x] Buy milk\r\n- [ ] Essay 📅 2026-11-14\n- [x] Old\n")
+        // A Tasks-plugin line also gets the done date.
+        XCTAssertEqual(ObsidianParser.complete(items[1], in: note, vault: "V", today: at(2026, 11, 13), calendar: cal),
+                       "# Plan\n- [ ] Buy milk\r\n- [x] Essay 📅 2026-11-14 ✅ 2026-11-13\n- [x] Old\n")
+        // The note changed since it was read: the task is found by its title.
+        let moved = "New first line\n" + note
+        XCTAssertEqual(ObsidianParser.complete(items[0], in: moved, vault: "V", today: at(2026, 11, 13), calendar: cal),
+                       "New first line\n# Plan\n- [x] Buy milk\r\n- [ ] Essay 📅 2026-11-14\n- [x] Old\n")
+        // Gone or already done: nothing is written.
+        XCTAssertNil(ObsidianParser.complete(items[0], in: "- [x] Buy milk\n", vault: "V", today: at(2026, 11, 13), calendar: cal))
+    }
+
     func testIgnoresDatesThatDoNotExist() {
         let items = ObsidianParser.tasks(in: "- [ ] Odd 📅 2026-02-31", file: "a.md", vault: "V", calendar: cal)
         XCTAssertEqual(items.map(\.title), ["Odd"])
@@ -108,6 +129,9 @@ final class AgendaTests: XCTestCase {
         XCTAssertTrue(plan[1].body.contains("1 email"))
         // Saturday evening warns about Sunday (the trip is still on).
         XCTAssertEqual(plan[2].title, "Tomorrow: 1 event")
+        // The app icon shows that morning's count: 4 items and 1 overdue.
+        XCTAssertEqual(plan.map(\.badge), [nil, 5, nil, 3])
+        XCTAssertEqual(NotificationPlanner.plan(agenda: agenda, now: at(2026, 11, 13, 12), schedule: BriefSchedule(), days: 3, badge: false).compactMap(\.badge), [])
         // Only the nearest morning counts the emails.
         XCTAssertEqual(plan[3].body, "• Trip\nAlso: 2 overdue")
 

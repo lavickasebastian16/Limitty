@@ -29,6 +29,8 @@ struct ContentView: View {
     @State private var showConnections = false
     @State private var showAllUndated = false
     @State private var showVoice = false
+    /// Show one source only (nil = everything).
+    @State private var filter: Source?
 
     var body: some View {
         NavigationStack {
@@ -81,9 +83,27 @@ struct ContentView: View {
         }
     }
 
+    private func chip(_ title: String, _ source: Source?, selected: Source?) -> some View {
+        Button {
+            filter = source
+        } label: {
+            Text(title)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(selected == source ? Color.white : Color.primary)
+                .background(Capsule().fill(selected == source ? Color.accentColor : Color(.tertiarySystemFill)))
+        }
+        .buttonStyle(.borderless)
+    }
+
     private var list: some View {
-        let agenda = model.agenda
+        let all = model.agenda
         let cal = Calendar.current
+        let connected = Source.allCases.filter { model.isConnected($0) }
+        // A filter for a source that was disconnected no longer applies.
+        let selected = filter.flatMap { connected.contains($0) ? $0 : nil }
+        let agenda = selected.map { one in Agenda(items: all.items.filter { $0.source == one }, calendar: cal) } ?? all
         let today = cal.startOfDay(for: Date())
         let days = (0..<14).compactMap { cal.date(byAdding: .day, value: $0, to: today) }
         let overdue = agenda.overdue(asOf: today)
@@ -92,7 +112,15 @@ struct ContentView: View {
 
         return List {
             Section {
-                SummaryCard(brief: BriefBuilder.day(today, agenda: agenda), refreshing: model.refreshing, lastRefresh: model.lastRefresh)
+                SummaryCard(brief: BriefBuilder.day(today, agenda: all), refreshing: model.refreshing, lastRefresh: model.lastRefresh)
+                if connected.count > 1 {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            chip("All", nil, selected: selected)
+                            ForEach(connected, id: \.self) { chip($0.label, $0, selected: selected) }
+                        }
+                    }
+                }
             }
 
             let problems = Source.allCases.filter { model.errors[$0] != nil }
@@ -200,31 +228,60 @@ struct ItemRow: View {
     var showDay = false
 
     var body: some View {
-        Button {
-            open()
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            if model.canComplete(item) {
+                // Tap the circle to tick the task off.
+                Button {
+                    withAnimation { model.complete(item) }
+                } label: {
+                    Image(systemName: "circle")
+                        .font(.title3)
+                        .foregroundStyle(item.source.color)
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 24)
+                .accessibilityLabel("Mark done")
+            } else {
                 Image(systemName: item.source.symbol)
                     .foregroundStyle(item.source.color)
                     .frame(width: 24)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.title).foregroundStyle(.primary).lineLimit(3)
-                    Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 8)
-                if let when = when {
-                    Text(when).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
-                }
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title).foregroundStyle(.primary).lineLimit(3)
+                Text(subtitle).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if let when = when {
+                Text(when).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
             }
         }
+        .contentShape(Rectangle())
+        .onTapGesture { open() }
+        .accessibilityAddTraits(.isButton)
         .swipeActions(edge: .trailing) {
-            if item.source == .reminders {
+            if model.canComplete(item) {
                 Button {
                     model.complete(item)
                 } label: {
                     Label("Done", systemImage: "checkmark")
                 }
                 .tint(.green)
+            }
+            Button {
+                withAnimation { model.hide(item) }
+            } label: {
+                Label("Hide", systemImage: "eye.slash")
+            }
+            .tint(.gray)
+        }
+        .swipeActions(edge: .leading) {
+            if item.source == .reminders {
+                Button {
+                    model.postpone(item)
+                } label: {
+                    Label("Tomorrow", systemImage: "arrow.turn.up.right")
+                }
+                .tint(.orange)
             }
         }
     }

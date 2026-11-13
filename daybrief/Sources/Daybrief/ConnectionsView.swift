@@ -188,6 +188,13 @@ struct ConnectionsView: View {
             if model.settings.schedule.eveningEnabled {
                 DatePicker("Time", selection: time(\.eveningHour, \.eveningMinute), displayedComponents: .hourAndMinute)
             }
+            Toggle("Count on the app icon", isOn: Binding(get: { model.settings.badge }, set: { on in
+                model.update { $0.badge = on }
+                Task { await model.reschedule() }
+            }))
+            if !model.hidden.isEmpty {
+                Button("Show \(model.hidden.count) hidden \(model.hidden.count == 1 ? "item" : "items") again") { model.showHidden() }
+            }
             Button("Send a test summary now") {
                 Task { await model.sendTest() }
             }
@@ -198,7 +205,7 @@ struct ConnectionsView: View {
         } header: {
             Text("Daily summary")
         } footer: {
-            Text("Summaries for the next 7 days are scheduled each time Daybrief refreshes: when you open it, and now and then in the background when iOS allows. Open Daybrief every few days so they stay up to date.")
+            Text("The count on the app icon is today's items plus overdue tasks. Summaries for the next 7 days are scheduled each time Daybrief refreshes: when you open it, and now and then in the background when iOS allows. Open Daybrief every few days so they stay up to date.")
         }
     }
 

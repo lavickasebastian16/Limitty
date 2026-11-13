@@ -29,6 +29,40 @@ enum ObsidianSource {
         return try await Task.detached(priority: .utility) { try read(bookmark) }.value
     }
 
+    /// Ticks the task in its note (`- [x]`).
+    static func complete(_ item: Item) async throws {
+        guard let bookmark = UserDefaults.standard.data(forKey: bookmarkKey) else { throw BriefError(chooseAgain) }
+        try await Task.detached(priority: .userInitiated) { try tick(item, bookmark) }.value
+    }
+
+    private static func tick(_ item: Item, _ bookmark: Data) throws {
+        var stale = false
+        guard let root = try? URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &stale),
+              root.startAccessingSecurityScopedResource() else { throw BriefError(chooseAgain) }
+        defer { root.stopAccessingSecurityScopedResource() }
+        guard let place = ObsidianParser.location(of: item.id) else { throw BriefError("That task can't be found any more.") }
+        let vault = root.lastPathComponent
+        let file = root.appendingPathComponent(place.file)
+
+        // Coordinated, so it doesn't collide with Obsidian or iCloud writing the same note.
+        var outcome: Result<Void, Error> = .failure(BriefError("The note couldn't be opened."))
+        var coordination: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: file, options: [], error: &coordination) { url in
+            do {
+                let text = try String(contentsOf: url, encoding: .utf8)
+                guard let changed = ObsidianParser.complete(item, in: text, vault: vault, today: Date()) else {
+                    throw BriefError("That task has changed in Obsidian. Pull down to refresh.")
+                }
+                try Data(changed.utf8).write(to: url)
+                outcome = .success(())
+            } catch {
+                outcome = .failure(error)
+            }
+        }
+        if let coordination { throw coordination }
+        try outcome.get()
+    }
+
     private static func read(_ bookmark: Data) throws -> [Item] {
         var stale = false
         guard let root = try? URL(resolvingBookmarkData: bookmark, options: [], relativeTo: nil, bookmarkDataIsStale: &stale) else {

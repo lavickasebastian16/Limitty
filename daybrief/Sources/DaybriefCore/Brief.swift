@@ -75,6 +75,8 @@ public struct PlannedNotification: Equatable, Sendable {
     public var fireDate: Date
     public var title: String
     public var body: String
+    /// The number to show on the app icon when it arrives. Nil leaves it alone.
+    public var badge: Int?
 }
 
 public enum NotificationPlanner {
@@ -84,7 +86,7 @@ public enum NotificationPlanner {
     /// The notifications for the next `days` days, from what is known now.
     /// iOS can't be relied on to wake the app each morning, so they are all
     /// scheduled ahead and replaced on every refresh.
-    public static func plan(agenda: Agenda, now: Date, schedule: BriefSchedule, days: Int = 7) -> [PlannedNotification] {
+    public static func plan(agenda: Agenda, now: Date, schedule: BriefSchedule, days: Int = 7, badge: Bool = true) -> [PlannedNotification] {
         let cal = agenda.calendar
         let today = cal.startOfDay(for: now)
         var out: [PlannedNotification] = []
@@ -100,17 +102,23 @@ public enum NotificationPlanner {
                 // The email count is only right for the nearest morning.
                 let brief = BriefBuilder.day(day, agenda: agenda, includeMail: firstMorning)
                 firstMorning = false
-                out.append(PlannedNotification(id: "\(idPrefix)morning-\(key)", fireDate: fire, title: brief.title, body: brief.body))
+                out.append(PlannedNotification(id: "\(idPrefix)morning-\(key)", fireDate: fire, title: brief.title, body: brief.body,
+                                               badge: badge ? openCount(on: day, agenda: agenda) : nil))
             }
 
             if schedule.eveningEnabled,
                let fire = cal.date(bySettingHour: schedule.eveningHour, minute: schedule.eveningMinute, second: 0, of: day),
                fire > now,
                let brief = BriefBuilder.dayBefore(next, agenda: agenda) {
-                out.append(PlannedNotification(id: "\(idPrefix)evening-\(key)", fireDate: fire, title: brief.title, body: brief.body))
+                out.append(PlannedNotification(id: "\(idPrefix)evening-\(key)", fireDate: fire, title: brief.title, body: brief.body, badge: nil))
             }
         }
         return out
+    }
+
+    /// What the app icon counts: that day's items plus overdue tasks.
+    public static func openCount(on day: Date, agenda: Agenda) -> Int {
+        agenda.items(on: day).count + agenda.overdue(asOf: day).count
     }
 
     static func dayKey(_ day: Date, calendar: Calendar) -> String {

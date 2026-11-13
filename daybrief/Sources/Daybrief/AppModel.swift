@@ -15,8 +15,12 @@ final class AppModel {
     /// Whether iOS lets Daybrief show notifications.
     private(set) var notificationsAllowed = true
 
+    /// Items you swiped away ("Hide"). They stay out of the list and the summaries.
+    private(set) var hidden: Set<String> = []
+
     private var eduPage = EduPageClient()
     private static let settingsKey = "settings"
+    private static let hiddenKey = "hidden"
     static let eduPasswordKey = "edupage-password"
     static let gmailPasswordKey = "gmail-password"
 
@@ -32,6 +36,7 @@ final class AppModel {
            let saved = try? JSONDecoder().decode(AppSettings.self, from: data) {
             settings = saved
         }
+        hidden = Set(UserDefaults.standard.stringArray(forKey: Self.hiddenKey) ?? [])
         // The last result, so the list isn't empty while the first refresh runs.
         if let data = try? Data(contentsOf: cacheURL),
            let cached = try? JSONDecoder().decode([String: [Item]].self, from: data) {
@@ -41,7 +46,7 @@ final class AppModel {
         }
     }
 
-    var agenda: Agenda { Agenda(items: Source.allCases.flatMap { items[$0] ?? [] }) }
+    var agenda: Agenda { Agenda(items: Source.allCases.flatMap { items[$0] ?? [] }.filter { !hidden.contains($0.id) }) }
 
     func isConnected(_ source: Source) -> Bool {
         switch source {
@@ -114,7 +119,9 @@ final class AppModel {
         await refresh()
     }
 
-    func refresh() async {
+    /// Reads the connected sources again. `only` limits it to some of them
+    /// (after adding or changing a reminder, the network ones needn't be asked).
+    func refresh(only: [Source]? = nil) async {
         guard !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
@@ -123,7 +130,7 @@ final class AppModel {
         let eduPage = self.eduPage
         let eduPassword = Keychain.get(Self.eduPasswordKey) ?? ""
         let gmailPassword = Keychain.get(Self.gmailPasswordKey) ?? ""
-        let connected = Source.allCases.filter(isConnected)
+        let connected = Source.allCases.filter { isConnected($0) && (only?.contains($0) ?? true) }
 
         // All sources at once; one that fails keeps its last items and shows why.
         let results = await withTaskGroup(of: (Source, Result<[Item], Error>).self) { group -> [(Source, Result<[Item], Error>)] in
@@ -149,7 +156,7 @@ final class AppModel {
             return all
         }
 
-        for source in Source.allCases where !connected.contains(source) {
+        for source in Source.allCases where !isConnected(source) {
             items[source] = nil
             errors[source] = nil
         }
@@ -158,6 +165,9 @@ final class AppModel {
             case .success(let found):
                 items[source] = found
                 errors[source] = nil
+                // Forget hidden items that no longer exist.
+                let ids = Set(found.map(\.id))
+                hidden = hidden.filter { !$0.hasPrefix(source.rawValue + ":") || ids.contains($0) }
             case .failure(let error):
                 if let e = error as? BriefError {
                     errors[source] = e.message
@@ -168,7 +178,8 @@ final class AppModel {
                 }
             }
         }
-        lastRefresh = Date()
+        if only == nil { lastRefresh = Date() }
+        saveHidden()
         saveCache()
         await reschedule()
     }
@@ -186,8 +197,11 @@ final class AppModel {
     /// Schedules the next week's summaries from what is known now.
     func reschedule() async {
         notificationsAllowed = await Notifier.shared.isAllowed()
-        let plan = NotificationPlanner.plan(agenda: agenda, now: Date(), schedule: settings.schedule)
+        let agenda = self.agenda
+        let now = Date()
+        let plan = NotificationPlanner.plan(agenda: agenda, now: now, schedule: settings.schedule, badge: settings.badge)
         await Notifier.shared.schedule(plan)
+        await Notifier.shared.setBadge(settings.badge ? NotificationPlanner.openCount(on: now, agenda: agenda) : 0)
     }
 
     func askForNotifications() async {
@@ -206,25 +220,66 @@ final class AppModel {
     func add(_ task: SpokenTask) async throws -> AppleSource.Added {
         let added = try await AppleSource.shared.add(task)
         update { if added.isEvent { $0.calendar = true } else { $0.reminders = true } }
-        await refresh()
+        await refresh(only: [.calendar, .reminders])
         return added
     }
 
     func undo(_ added: AppleSource.Added) {
         try? AppleSource.shared.remove(added)
-        Task { await refresh() }
+        Task { await refresh(only: [.calendar, .reminders]) }
+    }
+
+    /// Tasks that can be ticked off from here: reminders and Obsidian tasks.
+    func canComplete(_ item: Item) -> Bool {
+        item.kind == .task && (item.source == .reminders || item.source == .obsidian)
     }
 
     func complete(_ item: Item) {
+        guard canComplete(item) else { return }
+        Task {
+            do {
+                if item.source == .reminders {
+                    try AppleSource.shared.complete(item)
+                } else {
+                    try await ObsidianSource.complete(item)
+                }
+                // Ticking a line doesn't move the others, so the rest of the list is still right.
+                items[item.source]?.removeAll { $0.id == item.id }
+                errors[item.source] = nil
+                saveCache()
+                await reschedule()
+            } catch {
+                errors[item.source] = (error as? BriefError)?.message ?? error.localizedDescription
+            }
+        }
+    }
+
+    /// Moves a reminder to tomorrow.
+    func postpone(_ item: Item) {
         guard item.source == .reminders else { return }
         do {
-            try AppleSource.shared.complete(item)
-            items[.reminders]?.removeAll { $0.id == item.id }
-            saveCache()
-            Task { await reschedule() }
+            try AppleSource.shared.postpone(item)
+            Task { await refresh(only: [.reminders]) }
         } catch {
             errors[.reminders] = (error as? BriefError)?.message ?? error.localizedDescription
         }
+    }
+
+    /// Takes an item out of the list and the summaries (it isn't changed in its own app).
+    func hide(_ item: Item) {
+        hidden.insert(item.id)
+        saveHidden()
+        Task { await reschedule() }
+    }
+
+    func showHidden() {
+        hidden = []
+        saveHidden()
+        Task { await reschedule() }
+    }
+
+    private func saveHidden() {
+        UserDefaults.standard.set(Array(hidden), forKey: Self.hiddenKey)
     }
 }
 #endif
