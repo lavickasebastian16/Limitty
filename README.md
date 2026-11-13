@@ -14,6 +14,8 @@ Every build is on the **[latest release](https://github.com/lavickasebastian16/l
 | Omarchy / Arch Linux | `Limitty-1.05.002-x64.pacman` | `./linux/omarchy-install.sh` (recommended), or `sudo pacman -U Limitty-*.pacman` |
 | Any Linux | `Limitty-1.05.002-x86_64.AppImage` | `chmod +x Limitty-*.AppImage && ./Limitty-*.AppImage` |
 
+Also in this repo: **Daybrief**, a separate iPhone app that lists everything you have to do (Apple Calendar, Reminders, Obsidian, EduPage, Gmail) and sends a summary every morning and a warning the evening before. See [daybrief/README.md](daybrief/README.md); its `Daybrief-*.ipa` is on the same release.
+
 ## 🧩 One-click setup on your PC
 
 Open the desktop app and press **Install agents**. It opens by itself the first time, or later from the menu (⋯) → **Choose agents…**, or with `limitty --agents`. All three agents are ticked; untick any you don't want. Limitty then does everything in order:

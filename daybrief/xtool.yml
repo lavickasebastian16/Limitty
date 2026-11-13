@@ -1,0 +1,6 @@
+version: 1
+# Change this to something unique to you if xtool reports the ID is taken.
+bundleID: com.limitty.daybrief
+product: Daybrief
+iconPath: Resources/AppIcon.png
+infoPath: Daybrief-Info.plist

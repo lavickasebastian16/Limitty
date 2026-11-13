@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleVersion</key>
+	<string>100000</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.00.000</string>
+	<key>CFBundleDisplayName</key>
+	<string>Daybrief</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Daybrief shows your calendar events in your daily summary.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Daybrief shows your calendar events in your daily summary.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Daybrief shows your reminders in your daily summary and can mark them done.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Daybrief shows your reminders in your daily summary and can mark them done.</string>
+	<!-- Lets iOS wake Daybrief now and then to refresh your summary. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.limitty.daybrief.refresh</string>
+	</array>
+</dict>
+</plist>

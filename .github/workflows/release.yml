@@ -2,6 +2,7 @@ name: Build apps
 
 # Builds every Limitty app and publishes them on the "latest" release:
 #   - iPhone: Limitty-<version>.ipa (unsigned; install with Sideloadly / AltStore / SideStore)
+#   - iPhone: Daybrief-<version>.ipa, the daily to-do summary app in daybrief/ (also unsigned)
 #   - Linux:  AppImage, Arch package (.pacman, for Omarchy) and tar.gz
 # The version comes from limitty.json (X.XX.XXX); change it with scripts/set-version.js.
 
@@ -9,6 +10,7 @@ on:
   push:
     paths:
       - 'ios/**'
+      - 'daybrief/**'
       - 'src/**'
       - 'linux/**'
       - 'assets/**'
@@ -49,6 +51,28 @@ jobs:
           name: ios
           path: out/
 
+  daybrief:
+    runs-on: macos-15-intel
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xtool
+        run: brew install xtool-org/tap/xtool
+      - name: Core tests
+        working-directory: daybrief
+        run: swift test
+      - name: Build unsigned .ipa
+        working-directory: daybrief
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Daybrief-Info.plist)
+          xtool dev build --ipa --configuration release
+          IPA=$(find xtool -name '*.ipa' -print -quit)
+          mkdir -p ../out && cp "$IPA" "../out/Daybrief-$VERSION.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: daybrief
+          path: out/
+
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -74,7 +98,7 @@ jobs:
             dist/*.tar.gz
 
   publish:
-    needs: [ios, linux]
+    needs: [ios, daybrief, linux]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -95,5 +119,6 @@ jobs:
             --notes "Limitty $VERSION (${GITHUB_SHA::7}, ${GITHUB_REF_NAME}).
 
           - **iPhone:** \`Limitty-$VERSION.ipa\`, unsigned. Install with Sideloadly, AltStore or SideStore (see ios/README.md).
+          - **iPhone, Daybrief:** \`Daybrief-*.ipa\`, the daily to-do summary app, also unsigned (see daybrief/README.md).
           - **Omarchy / Arch:** \`sudo pacman -U Limitty-$VERSION-x64.pacman\`, or run \`linux/omarchy-install.sh\` (adds Hyprland rules and autostart).
           - **Any Linux:** the AppImage (\`chmod +x\` and run) or the tar.gz."
