@@ -10,6 +10,8 @@ One list of everything you have to do, from five places:
 | **EduPage** | Homework, exams and school events | School, username and password |
 | **Gmail** | Starred mail and unread mail from the last week | Address and an app password |
 
+**Add by voice:** tap the microphone and say it, for example “Remind me to hand in the essay on Friday at 8” or “Zajtra o 15:00 zubár”. Daybrief works out the title, day and time and adds it to Apple Reminders (which then alerts you at that time), or to your calendar if you say “event”, “meeting” or “appointment” with a date. It adds by itself two seconds after you stop talking, and shows **Undo**. It understands day and time words in English, Slovak and Czech, and listens in your iPhone's language.
+
 Each day you get two notifications:
 
 - **A morning summary** (07:00 unless you change it): what's on today, plus overdue tasks and waiting email.
@@ -39,7 +41,8 @@ Open Daybrief and tap **Connect** (later: the gear button).
 2. **Obsidian:** tap **Choose vault folder…** and pick the vault folder itself: **On My iPhone → Obsidian → your vault**, or **iCloud Drive → Obsidian → your vault**.
 3. **EduPage:** enter your school (the first part of the address: `myschool` for `myschool.edupage.org`), username and password.
 4. **Gmail:** Google doesn't accept your normal password from other apps. Turn on 2-Step Verification in your Google account, create an **app password** at <https://myaccount.google.com/apppasswords>, and paste it in.
-5. **Daily summary:** choose the two times and allow notifications. **Send a test summary now** shows what one looks like.
+5. **Voice:** the first time you tap the microphone, allow the microphone and speech recognition.
+6. **Daily summary:** choose the two times and allow notifications. **Send a test summary now** shows what one looks like.
 
 ### Which Obsidian tasks are found
 
@@ -70,7 +73,7 @@ By default: `is:starred OR (category:primary is:unread newer_than:7d)`, in your 
 ```
 xtool.yml                     app config for xtool
 Package.swift                 Swift package (targets below)
-Sources/DaybriefCore/         parsing (Obsidian, EduPage, Gmail), summaries, the notification plan
-Sources/Daybrief/             the app: list, connections, EventKit, notifications
+Sources/DaybriefCore/         parsing (Obsidian, EduPage, Gmail, spoken tasks), summaries, the notification plan
+Sources/Daybrief/             the app: list, connections, voice, EventKit, notifications
 Tests/DaybriefCoreTests/      tests (`swift test`)
 ```

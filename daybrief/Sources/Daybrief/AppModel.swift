@@ -202,6 +202,19 @@ final class AppModel {
 
     // MARK: actions
 
+    /// Adds what you said, and turns that source on so it shows in the list.
+    func add(_ task: SpokenTask) async throws -> AppleSource.Added {
+        let added = try await AppleSource.shared.add(task)
+        update { if added.isEvent { $0.calendar = true } else { $0.reminders = true } }
+        await refresh()
+        return added
+    }
+
+    func undo(_ added: AppleSource.Added) {
+        try? AppleSource.shared.remove(added)
+        Task { await refresh() }
+    }
+
     func complete(_ item: Item) {
         guard item.source == .reminders else { return }
         do {

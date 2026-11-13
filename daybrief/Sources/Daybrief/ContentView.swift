@@ -28,6 +28,7 @@ struct ContentView: View {
     @Environment(AppModel.self) private var model
     @State private var showConnections = false
     @State private var showAllUndated = false
+    @State private var showVoice = false
 
     var body: some View {
         NavigationStack {
@@ -42,6 +43,7 @@ struct ContentView: View {
                     } actions: {
                         Button("Connect") { showConnections = true }
                             .buttonStyle(.borderedProminent)
+                        Text("Or tap the microphone and say a task.").font(.footnote)
                     }
                 }
             }
@@ -56,6 +58,22 @@ struct ContentView: View {
                 }
             }
             .sheet(isPresented: $showConnections) { ConnectionsView() }
+            .sheet(isPresented: $showVoice) { VoiceSheet() }
+            .safeAreaInset(edge: .bottom) {
+                // Speak to add a task.
+                Button {
+                    showVoice = true
+                } label: {
+                    Image(systemName: "mic.fill")
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .frame(width: 60, height: 60)
+                        .background(Circle().fill(Color.accentColor))
+                        .shadow(radius: 4, y: 2)
+                }
+                .accessibilityLabel("Add a task by voice")
+                .padding(.bottom, 8)
+            }
             .task {
                 if model.anyConnected { await model.askForNotifications() }
                 await model.refreshIfStale()

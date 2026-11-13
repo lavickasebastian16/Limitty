@@ -64,6 +64,56 @@ final class AppleSource: @unchecked Sendable {
         }
     }
 
+    /// Something added by voice, with what's needed to take it back.
+    struct Added: Equatable {
+        var task: SpokenTask
+        var isEvent: Bool
+        var identifier: String
+    }
+
+    /// Adds a spoken task to Reminders, or to the calendar when it is an event with a date.
+    func add(_ task: SpokenTask) async throws -> Added {
+        let cal = Calendar.current
+        if task.isEvent, let start = task.date {
+            guard await requestCalendar() else {
+                throw BriefError("Calendar access is off. Turn it on in Settings → Privacy & Security → Calendars → Daybrief (Full Access).")
+            }
+            guard let calendar = store.defaultCalendarForNewEvents else { throw BriefError("There is no calendar to add events to.") }
+            let event = EKEvent(eventStore: store)
+            event.calendar = calendar
+            event.title = task.title
+            event.startDate = start
+            event.isAllDay = !task.hasTime
+            event.endDate = task.hasTime ? start.addingTimeInterval(3600) : start
+            try store.save(event, span: .thisEvent, commit: true)
+            return Added(task: task, isEvent: true, identifier: event.eventIdentifier ?? "")
+        }
+
+        guard await requestReminders() else {
+            throw BriefError("Reminders access is off. Turn it on in Settings → Privacy & Security → Reminders → Daybrief.")
+        }
+        guard let list = store.defaultCalendarForNewReminders() else { throw BriefError("There is no Reminders list to add to.") }
+        let reminder = EKReminder(eventStore: store)
+        reminder.calendar = list
+        reminder.title = task.title
+        if let due = task.date {
+            reminder.dueDateComponents = cal.dateComponents(task.hasTime ? [.year, .month, .day, .hour, .minute] : [.year, .month, .day], from: due)
+            // Reminders alerts you itself at that time.
+            if task.hasTime { reminder.addAlarm(EKAlarm(absoluteDate: due)) }
+        }
+        try store.save(reminder, commit: true)
+        return Added(task: task, isEvent: false, identifier: reminder.calendarItemIdentifier)
+    }
+
+    /// Takes back something just added by voice.
+    func remove(_ added: Added) throws {
+        if added.isEvent {
+            if let event = store.event(withIdentifier: added.identifier) { try store.remove(event, span: .thisEvent, commit: true) }
+        } else if let reminder = store.calendarItem(withIdentifier: added.identifier) as? EKReminder {
+            try store.remove(reminder, commit: true)
+        }
+    }
+
     /// Marks a reminder as done in the Reminders app.
     func complete(_ item: Item) throws {
         let id = String(item.id.dropFirst("reminders:".count))

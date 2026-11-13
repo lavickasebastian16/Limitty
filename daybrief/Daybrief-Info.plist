@@ -16,6 +16,10 @@
 	<string>Daybrief shows your reminders in your daily summary and can mark them done.</string>
 	<key>NSRemindersUsageDescription</key>
 	<string>Daybrief shows your reminders in your daily summary and can mark them done.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Daybrief listens when you tap the microphone, to add the task you say.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Daybrief turns what you say into a task.</string>
 	<!-- Lets iOS wake Daybrief now and then to refresh your summary. -->
 	<key>UIBackgroundModes</key>
 	<array>
