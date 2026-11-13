@@ -32,9 +32,12 @@ final class AppleSource: @unchecked Sendable {
             let title = (event.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             // The same repeating event has one identifier, so the start time is added.
             let id = "calendar:\(event.eventIdentifier ?? title):\(Int(begin.timeIntervalSince1970))"
+            // "Work · Room 12": the calendar, then where it is.
+            let place = (event.location ?? "").split(separator: "\n").first.map(String.init) ?? ""
+            let detail = [event.calendar?.title, place.isEmpty ? nil : place].compactMap { $0 }.joined(separator: " · ")
             return Item(id: id, source: .calendar, kind: .event, title: title.isEmpty ? "(no title)" : title,
-                        detail: event.calendar?.title, date: begin, end: event.endDate, hasTime: !event.isAllDay,
-                        link: "calshow:\(Int(begin.timeIntervalSinceReferenceDate))")
+                        detail: detail, date: begin, end: event.endDate, hasTime: !event.isAllDay,
+                        link: "calshow:\(Int(begin.timeIntervalSinceReferenceDate))", tint: Theme.hex(event.calendar?.cgColor))
         }
     }
 
@@ -57,7 +60,7 @@ final class AppleSource: @unchecked Sendable {
                     let title = (r.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                     return Item(id: "reminders:\(r.calendarItemIdentifier)", source: .reminders, kind: .task,
                                 title: title.isEmpty ? "(no title)" : title, detail: r.calendar?.title,
-                                date: date, hasTime: hasTime, link: "x-apple-reminderkit://")
+                                date: date, hasTime: hasTime, link: "x-apple-reminderkit://", tint: Theme.hex(r.calendar?.cgColor))
                 }
                 done.resume(returning: items)
             }

@@ -15,6 +15,7 @@ struct DaybriefApp: App {
         WindowGroup {
             ContentView()
                 .environment(model)
+                .tint(Theme.accent)
                 .onChange(of: phase) { _, now in
                     if now == .active { Task { await model.refreshIfStale() } }
                     if now == .background { Notifier.shared.scheduleBackgroundRefresh() }

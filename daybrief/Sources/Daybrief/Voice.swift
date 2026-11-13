@@ -1,5 +1,6 @@
 #if os(iOS)
 import SwiftUI
+import UIKit
 import Speech
 import AVFoundation
 import DaybriefCore
@@ -160,7 +161,7 @@ struct VoiceSheet: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemBackground)))
     }
 
     private func when(_ task: SpokenTask) -> String {
@@ -230,6 +231,7 @@ struct VoiceSheet: View {
         Task {
             do {
                 stage = .added(try await model.add(task))
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             } catch {
                 stage = .failed((error as? BriefError)?.message ?? error.localizedDescription)
             }

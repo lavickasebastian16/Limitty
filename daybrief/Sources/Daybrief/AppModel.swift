@@ -234,23 +234,25 @@ final class AppModel {
         item.kind == .task && (item.source == .reminders || item.source == .obsidian)
     }
 
-    func complete(_ item: Item) {
-        guard canComplete(item) else { return }
-        Task {
-            do {
-                if item.source == .reminders {
-                    try AppleSource.shared.complete(item)
-                } else {
-                    try await ObsidianSource.complete(item)
-                }
-                // Ticking a line doesn't move the others, so the rest of the list is still right.
-                items[item.source]?.removeAll { $0.id == item.id }
-                errors[item.source] = nil
-                saveCache()
-                await reschedule()
-            } catch {
-                errors[item.source] = (error as? BriefError)?.message ?? error.localizedDescription
+    /// Ticks the task off in its own app. False when that didn't work (the reason is in `errors`).
+    @discardableResult
+    func complete(_ item: Item) async -> Bool {
+        guard canComplete(item) else { return false }
+        do {
+            if item.source == .reminders {
+                try AppleSource.shared.complete(item)
+            } else {
+                try await ObsidianSource.complete(item)
             }
+            // Ticking a line doesn't move the others, so the rest of the list is still right.
+            items[item.source]?.removeAll { $0.id == item.id }
+            errors[item.source] = nil
+            saveCache()
+            await reschedule()
+            return true
+        } catch {
+            errors[item.source] = (error as? BriefError)?.message ?? error.localizedDescription
+            return false
         }
     }
 

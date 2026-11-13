@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleVersion</key>
-	<string>101000</string>
+	<string>102000</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.01.000</string>
+	<string>1.02.000</string>
 	<key>CFBundleDisplayName</key>
 	<string>Daybrief</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

@@ -10,13 +10,21 @@ One list of everything you have to do, from five places:
 | **EduPage** | Homework, exams and school events | School, username and password |
 | **Gmail** | Starred mail and unread mail from the last week | Address and an app password |
 
-In the list you can:
+The app has three tabs:
 
-- **Tick a task off:** tap the circle next to a reminder or an Obsidian task. An Obsidian task is ticked in its note (`- [x]`; notes that use the Tasks plugin also get `✅` and the date).
-- **Hide something you've dealt with:** swipe left → **Hide**. This works on everything, including emails and EduPage items that can't be ticked. It only hides it in Daybrief, and it stays out of the summaries too. **Connections → Show hidden items again** brings them back.
+- **Today:** how many things are on today, tomorrow and overdue; what's **next up** and how long until it starts; then the overdue, today and tomorrow lists.
+- **Upcoming:** the next 30 days. Tap a day in the strip at the top to jump to it (the dots show how busy it is), show one source only, or search.
+- **Inbox:** things without a day: waiting email and tasks with no date. The tab shows how many emails are waiting.
+
+On any item you can:
+
+- **Open it:** tap it to open it in its own app.
+- **Tick it off:** tap the circle next to a reminder or an Obsidian task. An Obsidian task is ticked in its note (`- [x]`; notes that use the Tasks plugin also get `✅` and the date).
+- **Hide it once you've dealt with it:** swipe left → **Hide**. This works on everything, including emails and EduPage items that can't be ticked. It only hides it in Daybrief, and it stays out of the summaries too. **Settings → Show hidden items again** brings them back.
 - **Put a reminder off:** swipe right → **Tomorrow**.
-- **Show one source:** tap its name under the summary (Calendar, Reminders, Obsidian…).
-- **See the count on the app icon:** today's items plus overdue tasks. It can be turned off in Connections.
+- **Press and hold** for the same actions as a menu.
+
+Events and reminders use the colour of their calendar or list. The app icon shows today's items plus overdue tasks; that can be turned off in Settings.
 
 **Add by voice:** tap the microphone and say it, for example “Remind me to hand in the essay on Friday at 8” or “Zajtra o 15:00 zubár”. Daybrief works out the title, day and time and adds it to Apple Reminders (which then alerts you at that time), or to your calendar if you say “event”, “meeting” or “appointment” with a date. It adds by itself two seconds after you stop talking, and shows **Undo**. Can't talk right now? Type the same sentence in the box under the microphone. It understands day and time words in English, Slovak and Czech, and listens in your iPhone's language.
 
@@ -43,12 +51,12 @@ With a free Apple ID the app stops opening after 7 days until you install it aga
 
 ## Connect your sources
 
-Open Daybrief and tap **Connect** (later: the gear button).
+Open Daybrief and tap **Connect your sources** (later: the gear button → Settings).
 
 1. **Apple Calendar and Reminders:** turn on the switches and allow access when iOS asks. For Calendar choose **Full Access**; otherwise iOS doesn't let an app read events.
-2. **Obsidian:** tap **Choose vault folder…** and pick the vault folder itself: **On My iPhone → Obsidian → your vault**, or **iCloud Drive → Obsidian → your vault**.
-3. **EduPage:** enter your school (the first part of the address: `myschool` for `myschool.edupage.org`), username and password.
-4. **Gmail:** Google doesn't accept your normal password from other apps. Turn on 2-Step Verification in your Google account, create an **app password** at <https://myaccount.google.com/apppasswords>, and paste it in.
+2. **Obsidian:** open **Obsidian**, tap **Choose vault folder…** and pick the vault folder itself: **On My iPhone → Obsidian → your vault**, or **iCloud Drive → Obsidian → your vault**.
+3. **EduPage:** open **EduPage** and enter your school (the first part of the address: `myschool` for `myschool.edupage.org`), username and password.
+4. **Gmail:** open **Gmail**. Google doesn't accept your normal password from other apps. Turn on 2-Step Verification in your Google account, create an **app password** at <https://myaccount.google.com/apppasswords>, and paste it in.
 5. **Voice:** the first time you tap the microphone, allow the microphone and speech recognition.
 6. **Daily summary:** choose the two times and allow notifications. **Send a test summary now** shows what one looks like.
 
@@ -67,7 +75,7 @@ A task without a date in a daily note (`2026-11-14.md`) counts as due on that da
 
 ### Which emails are shown
 
-By default: `is:starred OR (category:primary is:unread newer_than:7d)`, in your inbox. You can change the search under **Gmail** in Connections; it uses [Gmail's search words](https://support.google.com/mail/answer/7190). Daybrief only reads, and nothing is marked as read.
+By default: `is:starred OR (category:primary is:unread newer_than:7d)`, in your inbox. You can change the search under **Settings → Gmail**; it uses [Gmail's search words](https://support.google.com/mail/answer/7190). Daybrief only reads, and nothing is marked as read.
 
 ## What to expect
 
@@ -82,6 +90,6 @@ By default: `is:starred OR (category:primary is:unread newer_than:7d)`, in your 
 xtool.yml                     app config for xtool
 Package.swift                 Swift package (targets below)
 Sources/DaybriefCore/         parsing (Obsidian, EduPage, Gmail, spoken tasks), summaries, the notification plan
-Sources/Daybrief/             the app: list, connections, voice, EventKit, notifications
+Sources/Daybrief/             the app: the three tabs, settings, voice, EventKit, notifications
 Tests/DaybriefCoreTests/      tests (`swift test`)
 ```

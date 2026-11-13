@@ -39,9 +39,11 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
     public var hasTime: Bool
     /// Opens the item in its own app.
     public var link: String?
+    /// The colour of its calendar or list, as "#RRGGBB".
+    public var tint: String?
 
     public init(id: String, source: Source, kind: ItemKind, title: String, detail: String? = nil,
-                date: Date? = nil, end: Date? = nil, hasTime: Bool = false, link: String? = nil) {
+                date: Date? = nil, end: Date? = nil, hasTime: Bool = false, link: String? = nil, tint: String? = nil) {
         self.id = id
         self.source = source
         self.kind = kind
@@ -51,6 +53,7 @@ public struct Item: Codable, Identifiable, Hashable, Sendable {
         self.end = end
         self.hasTime = hasTime
         self.link = link
+        self.tint = tint
     }
 }
 
